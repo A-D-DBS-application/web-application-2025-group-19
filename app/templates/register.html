@@ -1,13 +1,71 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Register</title>
+    <meta charset="UTF-8">
+    <title>Registreren</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-    <h1>Register</h1>
-    <form method="post">
-        Username: <input type="text" name="username" required>
-        <input type="submit" value="Register">
+<body class="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+
+<div class="w-full max-w-md bg-white rounded-lg shadow-lg p-8">
+    <!-- Icon -->
+    <div class="flex justify-center mb-6">
+        <div class="w-14 h-14 bg-black rounded-2xl flex items-center justify-center">
+            <!-- Truck Icon -->
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7 text-white" fill="none"
+                 viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M3 13.5V6a1 1 0 011-1h11v8.5m0 0h2.5L21 9.5V14M15 13.5H6m13 4a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm-12 0a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"/>
+            </svg>
+        </div>
+    </div>
+
+    <!-- Title -->
+    <h1 class="text-center mb-6 text-xl font-semibold">Registreren</h1>
+
+    <!-- Register Form -->
+    <form action="{{ url_for('main.register') }}" method="POST" class="space-y-4">
+
+        <div class="grid grid-cols-2 gap-4">
+            <div class="space-y-2">
+                <label for="firstname" class="font-medium">Voornaam</label>
+                <input id="firstname" name="firstname" placeholder="Type here ..."
+                       class="border p-2 w-full rounded" required>
+            </div>
+
+            <div class="space-y-2">
+                <label for="lastname" class="font-medium">Achternaam</label>
+                <input id="lastname" name="lastname" placeholder="Type here ..."
+                       class="border p-2 w-full rounded" required>
+            </div>
+        </div>
+
+        <div class="space-y-2">
+            <label for="email" class="font-medium">E-mailadres</label>
+            <input id="email" name="email" type="email" placeholder="Type here ..."
+                   class="border p-2 w-full rounded" required>
+        </div>
+
+        <div class="space-y-2">
+            <label for="password" class="font-medium">Wachtwoord</label>
+            <input id="password" name="password" type="password" placeholder="Type here ..."
+                   class="border p-2 w-full rounded" required>
+        </div>
+
+        <button type="submit" class="w-full bg-black text-white py-2 rounded">
+            Account aanmaken
+        </button>
+
+        <p class="text-center mt-4 text-sm">
+            Al een account?
+            <a href="{{ url_for('main.login') }}" class="text-blue-600 underline">
+                Inloggen
+            </a>
+        </p>
     </form>
+</div>
+
 </body>
 </html>
