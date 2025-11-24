@@ -1,104 +1,57 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Login</title>
+    <meta charset="UTF-8">
+    <title>Inloggen</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-    <h1>Login</h1>
-    <form method="post">
-        Username: <input type="text" name="username" required>
-        <input type="submit" value="Login">
-    </form>
-</body>
-</html>
+<body class="min-h-screen bg-slate-50 flex items-center justify-center p-4">
 
+<div class="w-full max-w-md bg-white rounded-lg shadow-lg p-8">
+    <!-- Icon -->
+    <div class="flex justify-center mb-6">
+        <div class="w-14 h-14 bg-black rounded-2xl flex items-center justify-center">
+            <!-- Truck Icon -->
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7 text-white" fill="none"
+                 viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M3 13.5V6a1 1 0 011-1h11v8.5m0 0h2.5L21 9.5V14M15 13.5H6m13 4a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm-12 0a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"/>
+            </svg>
+        </div>
+    </div>
 
-import { Truck } from "lucide-react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
-import { Input } from "./components/ui/input";
-import { Label } from "./components/ui/label";
-import { Button } from "./components/ui/button";
+    <!-- Title -->
+    <h1 class="text-center mb-6 text-xl font-semibold">Inloggen</h1>
 
-export default function App() {
-  return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white rounded-lg shadow-lg p-8">
-        {/* Icon */}
-        <div className="flex justify-center mb-6">
-          <div className="w-14 h-14 bg-black rounded-2xl flex items-center justify-center">
-            <Truck className="w-7 h-7 text-white" />
-          </div>
+    <!-- Login Form -->
+    <form action="{{ url_for('main.login') }}" method="POST" class="space-y-4">
+
+        <div class="space-y-2">
+            <label for="login-email" class="font-medium">E-mailadres</label>
+            <input id="login-email" name="email" type="email" placeholder="Type here ..."
+                   class="border p-2 w-full rounded" required>
         </div>
 
-        {/* Title */}
-        <h1 className="text-center mb-6">Leveringsplanning</h1>
+        <div class="space-y-2">
+            <label for="login-password" class="font-medium">Wachtwoord</label>
+            <input id="login-password" name="password" type="password" placeholder="Type here ..."
+                   class="border p-2 w-full rounded" required>
+        </div>
 
-        {/* Tabs */}
-        <Tabs defaultValue="registreren" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 mb-6">
-            <TabsTrigger value="inloggen">Inloggen</TabsTrigger>
-            <TabsTrigger value="registreren">Registreren</TabsTrigger>
-          </TabsList>
+        <button type="submit" class="w-full bg-black text-white py-2 rounded">
+            Inloggen
+        </button>
 
-          {/* Login Tab */}
-          <TabsContent value="inloggen" className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="login-email">E-mailadres</Label>
-              <Input
-                id="login-email"
-                type="email"
-                placeholder="Type here ..."
-              />
-            </div>
+        <p class="text-center mt-4 text-sm">
+            Nog geen account?
+            <a href="{{ url_for('main.register') }}" class="text-blue-600 underline">
+                Registreren
+            </a>
+        </p>
+    </form>
+</div>
 
-            <div className="space-y-2">
-              <Label htmlFor="login-password">Wachtwoord</Label>
-              <Input
-                id="login-password"
-                type="password"
-                placeholder="Type here ..."
-              />
-            </div>
-
-            <Button className="w-full bg-black hover:bg-gray-800">
-              Inloggen
-            </Button>
-          </TabsContent>
-
-          {/* Register Tab */}
-          <TabsContent value="registreren" className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="firstname">Voornaam</Label>
-                <Input id="firstname" placeholder="Type here ..." />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="lastname">Achternaam</Label>
-                <Input id="lastname" placeholder="Type here ..." />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="email">E-mailadres</Label>
-              <Input id="email" type="email" placeholder="Type here ..." />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="password">Wachtwoord</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="Type here ..."
-              />
-            </div>
-
-            <Button className="w-full bg-black hover:bg-gray-800">
-              Account aanmaken
-            </Button>
-          </TabsContent>
-        </Tabs>
-      </div>
-    </div>
-  );
-}
+</body>
+</html>
