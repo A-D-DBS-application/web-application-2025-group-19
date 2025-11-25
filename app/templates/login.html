@@ -1,55 +1,52 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="nl">
 <head>
     <meta charset="UTF-8">
     <title>Inloggen</title>
-
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
+
 <body class="min-h-screen bg-slate-50 flex items-center justify-center p-4">
 
 <div class="w-full max-w-md bg-white rounded-lg shadow-lg p-8">
+
     <!-- Icon -->
     <div class="flex justify-center mb-6">
         <div class="w-14 h-14 bg-black rounded-2xl flex items-center justify-center">
-            <!-- Truck Icon -->
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7 text-white" fill="none"
-                 viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M3 13.5V6a1 1 0 011-1h11v8.5m0 0h2.5L21 9.5V14M15 13.5H6m13 4a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm-12 0a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"/>
+            <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" stroke-width="2"
+                 viewBox="0 0 24 24">
+                <path d="M3 17V7a2 2 0 012-2h11a2 2 0 012 2v10m-2 0h3m-3 0a3 3 0 11-6 0m6 0H9m0 0a3 3 0 11-6 0m6 0H5"/>
             </svg>
         </div>
     </div>
 
-    <!-- Title -->
-    <h1 class="text-center mb-6 text-xl font-semibold">Inloggen</h1>
+    <h1 class="text-center mb-6 text-xl font-semibold">Leveringsplanning – Inloggen</h1>
 
-    <!-- Login Form -->
-    <form action="{{ url_for('main.login') }}" method="POST" class="space-y-4">
+    <form method="POST" action="{{ url_for('main.login') }}" class="space-y-4">
 
         <div class="space-y-2">
-            <label for="login-email" class="font-medium">E-mailadres</label>
-            <input id="login-email" name="email" type="email" placeholder="Type here ..."
-                   class="border p-2 w-full rounded" required>
+            <label for="login-username">
+                Gebruikersnaam <span class="text-gray-500 italic">(Voornaam.Achternaam)</span>
+            </label>
+            <input id="login-username" name="username" type="text"
+                   class="w-full border rounded-md px-3 py-2" placeholder="Type here ..." required>
         </div>
 
         <div class="space-y-2">
-            <label for="login-password" class="font-medium">Wachtwoord</label>
-            <input id="login-password" name="password" type="password" placeholder="Type here ..."
-                   class="border p-2 w-full rounded" required>
+            <label for="login-password">Wachtwoord</label>
+            <input id="login-password" name="password" type="password"
+                   class="w-full border rounded-md px-3 py-2" placeholder="Type here ..." required>
         </div>
 
-        <button type="submit" class="w-full bg-black text-white py-2 rounded">
+        <button class="w-full bg-black text-white py-2 rounded-md hover:bg-gray-800">
             Inloggen
         </button>
 
-        <p class="text-center mt-4 text-sm">
+        <p class="text-center text-sm mt-4">
             Nog geen account?
-            <a href="{{ url_for('main.register') }}" class="text-blue-600 underline">
-                Registreren
-            </a>
+            <a href="{{ url_for('main.register') }}" class="text-blue-600">Registreren</a>
         </p>
+
     </form>
 </div>
 
