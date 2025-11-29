@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <title>Registreren</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+
+<div class="w-full max-w-md bg-white rounded-lg shadow-lg p-8">
+
+    <!-- Icon -->
+    <div class="flex justify-center mb-6">
+        <div class="w-14 h-14 bg-black rounded-2xl flex items-center justify-center">
+            <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" stroke-width="2"
+                 viewBox="0 0 24 24">
+                <path d="M3 17V7a2 2 0 012-2h11a2 2 0 012 2v10m-2 0h3m-3 0a3 3 0 11-6 0m6 0H9m0 0a3 3 0 11-6 0m6 0H5"/>
+            </svg>
+        </div>
+    </div>
+
+    <h1 class="text-center mb-6 text-xl font-semibold">Leveringsplanning – Registreren</h1>
+
+    <form method="POST" action="{{ url_for('main.register') }}" class="space-y-4">
+
+        <div class="grid grid-cols-2 gap-4">
+            <div class="space-y-2">
+                <label for="firstname">Voornaam</label>
+                <input id="firstname" name="firstname" class="w-full border rounded-md px-3 py-2"
+                       placeholder="Type here ..." required>
+            </div>
+
+            <div class="space-y-2">
+                <label for="lastname">Achternaam</label>
+                <input id="lastname" name="lastname" class="w-full border rounded-md px-3 py-2"
+                       placeholder="Type here ..." required>
+            </div>
+        </div>
+
+        <div class="space-y-2">
+            <label for="email">E-mailadres</label>
+            <input id="email" name="email" type="email"
+                   class="w-full border rounded-md px-3 py-2" placeholder="Type here ..." required>
+        </div>
+
+        <div class="space-y-2">
+            <label for="password">Wachtwoord</label>
+            <input id="password" name="password" type="password"
+                   class="w-full border rounded-md px-3 py-2" placeholder="Type here ..." required>
+        </div>
+
+        <button class="w-full bg-black text-white py-2 rounded-md hover:bg-gray-800">
+            Account aanmaken
+        </button>
+
+        <p class="text-center text-sm mt-4">
+            Al een account?
+            <a href="{{ url_for('main.login') }}" class="text-blue-600">Inloggen</a>
+        </p>
+
+    </form>
+</div>
+
+</body>
+</html>
+
+
+

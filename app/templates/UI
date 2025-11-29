@@ -1,0 +1,144 @@
+import { useState } from "react";
+import { Truck, Search } from "lucide-react";
+import { Input } from "./components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "./components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./components/ui/select";
+import DeliveryCalendar from "./components/DeliveryCalendar";
+import TruckSchedule from "./components/TruckSchedule";
+import DriverAvailability, { DriverAvailabilityData } from "./components/DriverAvailability";
+import MainHub from "./components/MainHub";
+import { useIsMobile } from "./components/ui/use-mobile";
+
+export interface DeliverySchedule {
+  date: string;
+  truckId: string;
+  destination: string;
+  available: boolean;
+}
+
+export interface TruckData {
+  id: string;
+  name: string;
+  status: "available" | "in-transit" | "maintenance";
+}
+
+export interface PlannedDelivery {
+  id: string;
+  address: string;
+  date: Date;
+  time: string;
+  truck: string;
+  driver: string;
+  status: "planned" | "in-progress" | "completed";
+}
+
+const Index = () => {
+  const isMobile = useIsMobile();
+  const [activeTab, setActiveTab] = useState("hub");
+  const [address, setAddress] = useState("");
+  const [deliverySize, setDeliverySize] = useState<string>("");
+  const [trucks, setTrucks] = useState<TruckData[]>([]);
+
+  const handleAddTruck = (truckName: string, status: "available" | "in-transit" | "maintenance") => {
+    const newTruckId = `truck-${Date.now()}`;
+    const newTruck: TruckData = {
+      id: newTruckId,
+      name: truckName,
+      status: status
+    };
+    setTrucks([...trucks, newTruck]);
+  };
+
+  const handleDeleteTruck = (id: string) => {
+    setTrucks(trucks.filter(truck => truck.id !== id));
+  };
+  const [driverAvailabilities, setDriverAvailabilities] = useState<DriverAvailabilityData[]>([]);
+
+  const [schedules] = useState<DeliverySchedule[]>([]);
+
+  const [plannedDeliveries, setPlannedDeliveries] = useState<PlannedDelivery[]>([]);
+
+  const handleAddAvailability = (availability: DriverAvailabilityData) => {
+    setDriverAvailabilities([...driverAvailabilities, availability]);
+  };
+
+  const handleDeleteAvailability = (id: string) => {
+    setDriverAvailabilities(driverAvailabilities.filter(avail => avail.id !== id));
+  };
+
+  const handleDeleteDelivery = (id: string) => {
+    setPlannedDeliveries(plannedDeliveries.filter(delivery => delivery.id !== id));
+  };
+
+  return (
+    <div className="min-h-screen bg-background">
+      <header className="border-b bg-card">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center gap-2">
+            <Truck className="h-6 w-6 text-primary" />
+            <h1 className="text-2xl font-bold">Delivery Schedule</h1>
+          </div>
+        </div>
+      </header>
+
+      <main className="container mx-auto px-4 py-8">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList className="grid w-full max-w-2xl mx-auto grid-cols-3">
+            <TabsTrigger value="hub">Dashboard</TabsTrigger>
+            <TabsTrigger value="deliveries">{isMobile ? "Leveringen" : "Levering plannen"}</TabsTrigger>
+            <TabsTrigger value="availability">{isMobile ? "Chauffeurs" : "Chauffeur beschikbaarheid"}</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="hub">
+            <MainHub 
+              trucks={trucks}
+              schedules={schedules}
+              driverAvailabilities={driverAvailabilities}
+              plannedDeliveries={plannedDeliveries}
+              onNavigate={setActiveTab}
+              onDeleteDelivery={handleDeleteDelivery}
+            />
+          </TabsContent>
+
+          <TabsContent value="deliveries">
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  {address ? `Beschikbaarheid voor ${address}` : "Selecteer een leveringsdatum"}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <DeliveryCalendar 
+                  schedules={schedules}
+                  address={address}
+                  trucks={trucks}
+                  driverAvailabilities={driverAvailabilities}
+                  onAddTruck={handleAddTruck}
+                  onDeleteTruck={handleDeleteTruck}
+                />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="availability">
+            <Card>
+              <CardHeader>
+                <CardTitle>Chauffeur beschikbaarheid beheren</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <DriverAvailability 
+                  availabilities={driverAvailabilities}
+                  onAddAvailability={handleAddAvailability}
+                  onDeleteAvailability={handleDeleteAvailability}
+                />
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </main>
+    </div>
+  );
+};
+
+export default Index;

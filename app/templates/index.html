@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <title>Leveringsplanning</title>
+</head>
+<body class="bg-slate-50 min-h-screen flex items-center justify-center p-4">
+
+<div class="w-full max-w-md bg-white rounded-lg shadow-lg p-8">
+
+    <!-- Icon -->
+    <div class="flex justify-center mb-6">
+        <div class="w-14 h-14 bg-black rounded-2xl flex items-center justify-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M3 13.5V6a1 1 0 011-1h11v8.5m0 0h2.5L21 9.5V14M15 13.5H6m13 4a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm-12 0a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
+            </svg>
+        </div>
+    </div>
+
+    <!-- Title -->
+    <h1 class="text-center mb-8 text-xl font-semibold">Leveringsplanning</h1>
+
+    <!-- Welcome message -->
+    <p class="text-center text-gray-600 mb-8">
+        Welkom bij het leveringsplanning systeem. Log in of registreer om verder te gaan.
+    </p>
+
+    <!-- Action buttons -->
+    <div class="space-y-4">
+        <a href="{{ url_for('main.login') }}" class="w-full bg-black text-white py-3 rounded-md hover:bg-gray-800 flex items-center justify-center">
+            Inloggen
+        </a>
+        
+        <a href="{{ url_for('main.register') }}" class="w-full border border-gray-300 text-gray-700 py-3 rounded-md hover:bg-gray-50 flex items-center justify-center">
+            Registreren
+        </a>
+    </div>
+
+</div>
+
+<!-- Bootstrap -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
