@@ -1,5 +1,3 @@
-<<<<<<< HEAD
-
 
 # app/routes.py
 from datetime import date
@@ -9,26 +7,35 @@ from .models import (
     db, Tenant, Region, Location, Employee, Availability, Customer, Product,
     CustomerOrder, OrderItem, DeliveryRun, Delivery,
     EmployeeRole, set_employee_availability, get_available_drivers, add_order,
-    upsert_run_and_attach_delivery, get_delivery_overview, suggest_delivery_days
-=======
-# app/routes.py
-from datetime import datetime, date as date_cls, time as time_cls
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
-from .models import (
-    db, Medewerker, Beschikbaarheid, Product, Levering,
-    set_medewerker_beschikbaarheid_global,
-    set_medewerker_beschikbaarheid_op_dag,
-    get_beschikbare_chauffeurs, create_levering,
-    get_levering_overview, suggest_delivery_days_by_municipality,
-    extract_municipality_from_adres, gebruikte_minuten_op_dag, werkdag_minuten,
->>>>>>> fa763f594a89d16781ff5dc80a17f22ecaa38367
+    upsert_run_and_attach_delivery_with_capacity, get_delivery_overview, suggest_delivery_days
 )
 
 main = Blueprint("main", __name__)
 
-<<<<<<< HEAD
+def _ensure_tenant_and_get_id() -> int:
+    """
+    Zorgt dat er een geldige tenant bestaat en retourneert het effectieve tenant_id.
+    - Gebruikt geconfigureerde TENANT_ID indien die rij bestaat.
+    - Anders pakt een bestaande tenant (eerste).
+    - Anders maakt een nieuwe aan ZONDER expliciet tenant_id (Identity).
+    """
+    tid_cfg = int(current_app.config.get("TENANT_ID", 1))
+
+    t = Tenant.query.filter_by(tenant_id=tid_cfg).first()
+    if not t:
+        t = Tenant.query.first()
+    if not t:
+        t = Tenant(name="Default Tenant", industry="retail", contact_email="info@example.com")
+        db.session.add(t)
+        db.session.commit()  # t.tenant_id wordt door Postgres gegenereerd
+
+    # update runtime-config zodat volgende calls consistent zijn
+    current_app.config["TENANT_ID"] = t.tenant_id
+    return int(t.tenant_id)
+
 def tenant_id() -> int:
-    return int(current_app.config.get("TENANT_ID", 1))
+    # wrapper die zeker maakt dat er een tenant bestaat
+    return _ensure_tenant_and_get_id()
 
 # --- Home (index) ---
 @main.route("/", methods=["GET"])
@@ -65,19 +72,22 @@ def register():
         flash("Vul alle velden in.", "error")
         return redirect(url_for("main.register"))
 
-    if Employee.query.filter_by(tenant_id=tenant_id(), email=email).first():
+    tid = tenant_id()  # zorgt dat tenant bestaat
+
+    if Employee.query.filter_by(tenant_id=tid, email=email).first():
         flash("E-mailadres bestaat al.", "error")
         return redirect(url_for("main.register"))
 
     emp = Employee(
-        tenant_id=tenant_id(), first_name=first, last_name=last,
+        tenant_id=tid, first_name=first, last_name=last,
         email=email, role=EmployeeRole.seller, active=True
     )
     db.session.add(emp)
-    db.session.commit()
-
+    db.session.flush()  # <<< belangrijk: krijg employee_id rechtstreeks
     session["employee_id"] = emp.employee_id
     session["username"] = f"{emp.first_name}.{emp.last_name}".lower()
+    db.session.commit()
+
     flash("Account aangemaakt en ingelogd.", "success")
     return redirect(url_for("main.index"))
 
@@ -96,8 +106,9 @@ def login():
         return redirect(url_for("main.login"))
 
     first, last = parts
+    tid = tenant_id()
     emp = (Employee.query
-           .filter_by(tenant_id=tenant_id(), first_name=first, last_name=last, active=True)
+           .filter_by(tenant_id=tid, first_name=first, last_name=last, active=True)
            .first())
     if not emp:
         flash("Gebruiker niet gevonden of niet actief.", "error")
@@ -139,20 +150,25 @@ def add_listing():
         flash("Prijs moet een positief getal zijn.", "error")
         return redirect(url_for("main.add_listing"))
 
-    # Demo customer/location — vervang later met echte UI-selecties
-    customer = Customer.query.filter_by(tenant_id=tenant_id(), email="demo@customer.local").first()
-    if not customer:
-        customer = Customer(tenant_id=tenant_id(), name="Demo Customer", municipality="DemoTown",
-                            email="demo@customer.local")
-        db.session.add(customer); db.session.flush()
+    tid = tenant_id()
 
-    loc = Location.query.filter_by(tenant_id=tenant_id(), name="Demo Store").first()
+    # Demo customer/location — vervang later met echte UI-selecties
+    customer = Customer.query.filter_by(tenant_id=tid, email="demo@customer.local").first()
+    if not customer:
+        customer = Customer(
+            tenant_id=tid, name="Demo Customer", municipality="DemoTown",
+            email="demo@customer.local"
+        )
+        db.session.add(customer)
+        db.session.flush()
+
+    loc = Location.query.filter_by(tenant_id=tid, name="Demo Store").first()
     if not loc:
-        loc = Location(tenant_id=tenant_id(), name="Demo Store", address="Demo Street 1", region_id=None)
+        loc = Location(tenant_id=tid, name="Demo Store", address="Demo Street 1", region_id=None)
         db.session.add(loc); db.session.flush()
 
     order_id = add_order(
-        tenant_id=tenant_id(),
+        tenant_id=tid,
         customer_id=customer.customer_id,
         location_id=loc.location_id,
         seller_id=session["employee_id"],
@@ -183,8 +199,12 @@ def availability():
 # --- Suggesties per regio ---
 @main.route("/suggest/<int:region_id>", methods=["GET"])
 def suggest(region_id: int):
-    days = suggest_delivery_days(tenant_id(), region_id)
-    flash(f"Voorgestelde dagen voor regio {region_id}: {', '.join(map(str, days)) or 'geen'}", "info")
+    suggestions = suggest_delivery_days(tenant_id(), region_id)
+    if suggestions:
+        msg = ", ".join([f"{s['date']} ({s['free_minutes']}m vrij)" for s in suggestions])
+    else:
+        msg = "geen"
+    flash(f"Voorgestelde dagen voor regio {region_id}: {msg}", "info")
     return redirect(url_for("main.index"))
 
 # --- Levering plannen ---
@@ -194,185 +214,35 @@ def schedule():
         flash("Log in om leveringen te plannen.", "error")
         return redirect(url_for("main.login"))
 
-    order_id = int(request.form.get("order_id"))
+    tid = tenant_id()
+    order_id = request.form.get("order_id")
     region_id = request.form.get("region_id")
     scheduled_date_str = request.form.get("scheduled_date")
 
     try:
+        order_id = int(order_id)
         region_id = int(region_id) if region_id else None
         scheduled_date = date.fromisoformat(scheduled_date_str)
     except Exception:
         flash("Ongeldige invoer.", "error")
         return redirect(url_for("main.index"))
 
-    drivers = get_available_drivers(tenant_id(), region_id, scheduled_date) if region_id else []
-    driver_id = drivers[0].employee_id if drivers else None
+    # Kies een beschikbare driver (indien region_id gegeven)
+    driver_id = None
+    if region_id is not None:
+        drivers = get_available_drivers(tid, region_id, scheduled_date)
+        driver_id = drivers[0].employee_id if drivers else None
 
-    delivery_id = upsert_run_and_attach_delivery(tenant_id(), order_id, region_id, driver_id, scheduled_date)
-    flash(f"Levering #{delivery_id} gepland op {scheduled_date}.", "success")
-    return redirect(url_for("main.index"))
-=======
-# ---------------------
-# Pages
-# ---------------------
-@main.route("/")
-def index():
-    # Simple landing: counts and today overview
-    today = date_cls.today()
-    chauffeurs = get_beschikbare_chauffeurs(today)
-    overzicht = get_levering_overview(datum=today)
-    return render_template("index.html", chauffeurs=chauffeurs, overzicht=overzicht, today=today)
+    try:
+        delivery_id = upsert_run_and_attach_delivery_with_capacity(
+            tid, order_id, region_id, driver_id, scheduled_date
+        )
+        flash(f"Levering #{delivery_id} gepland op {scheduled_date}.", "success")
+    except ValueError as e:
+        flash(str(e), "error")
+    except Exception:
+        db.session.rollback()
+        flash("Onbekende fout bij plannen van levering.", "error")
 
-# ---- Medewerkers ----
-@main.route("/medewerkers")
-def medewerkers_list():
-    lijst = Medewerker.query.order_by(Medewerker.naam.asc()).all()
-    return render_template("medewerkers.html", medewerkers=lijst)
 
-@main.route("/medewerkers/nieuw", methods=["GET", "POST"])
-def medewerkers_nieuw():
-    if request.method == "POST":
-        naam = (request.form.get("naam") or "").strip()
-        rol = (request.form.get("rol") or "").strip().lower()
-        if not naam or not rol:
-            flash("Naam en rol zijn vereist.", "error")
-            return redirect(url_for("main.medewerkers_nieuw"))
-        m = Medewerker(naam=naam, rol=rol, beschikbaar=True)
-        db.session.add(m)
-        db.session.commit()
-        flash("Medewerker toegevoegd.", "success")
-        return redirect(url_for("main.medewerkers_list"))
-    return render_template("medewerker_nieuw.html")
 
-@main.route("/medewerkers/<int:mid>/beschikbaar", methods=["POST"])
-def medewerkers_toggle(mid: int):
-    beschikbaar = request.form.get("beschikbaar") == "true"
-    set_medewerker_beschikbaarheid_global(mid, beschikbaar)
-    flash("Globale beschikbaarheid bijgewerkt.", "success")
-    return redirect(url_for("main.medewerkers_list"))
-
-# ---- Beschikbaarheid per dag ----
-@main.route("/beschikbaarheid", methods=["GET", "POST"])
-def beschikbaarheid_view():
-    today = date_cls.today()
-    if request.method == "POST":
-        mid = int(request.form.get("medewerker_id"))
-        dag_str = request.form.get("datum")
-        dag = datetime.strptime(dag_str, "%Y-%m-%d").date()
-        beschikbaar = request.form.get("beschikbaar") == "true"
-        set_medewerker_beschikbaarheid_op_dag(mid, dag, beschikbaar)
-        flash("Beschikbaarheid per dag bijgewerkt.", "success")
-        return redirect(url_for("main.beschikbaarheid_view"))
-
-    # page data
-    medewerkers = Medewerker.query.order_by(Medewerker.naam.asc()).all()
-    # show last 30 records
-    records = (
-        Beschikbaarheid.query
-        .order_by(Beschikbaarheid.datum.desc())
-        .limit(30)
-        .all()
-    )
-    return render_template("beschikbaarheid.html", medewerkers=medewerkers, records=records, today=today)
-
-# ---- Leveringen toevoegen / plannen ----
-@main.route("/levering/nieuw", methods=["GET", "POST"])
-def levering_nieuw():
-    if request.method == "POST":
-        datum_str = request.form.get("datum")
-        tijd_str = request.form.get("tijdstip")
-        medewerker_id = request.form.get("medewerker_id")
-        medewerker_id = int(medewerker_id) if medewerker_id else None
-        product_naam = (request.form.get("product_naam") or "").strip()
-        adres = (request.form.get("adres") or "").strip()
-        handmatig = (request.form.get("handmatig") == "true")
-
-        # Parse date/time
-        try:
-            datum = datetime.strptime(datum_str, "%Y-%m-%d").date()
-        except Exception:
-            flash("Ongeldige datum.", "error")
-            return redirect(url_for("main.levering_nieuw"))
-
-        tijdstip = None
-        if tijd_str:
-            try:
-                tijdstip = datetime.strptime(tijd_str, "%H:%M").time()
-            except Exception:
-                flash("Ongeldig tijdstip (hh:mm).", "error")
-                return redirect(url_for("main.levering_nieuw"))
-
-        # If chauffeur chosen, validate capacity & availability; create levering
-        try:
-            levering_id = create_levering(
-                datum=datum,
-                tijdstip=tijdstip,
-                medewerker_id=medewerker_id,
-                product_naam=product_naam,
-                adres=adres,
-                handmatig=handmatig,
-            )
-        except ValueError as e:
-            flash(str(e), "error")
-            return redirect(url_for("main.levering_nieuw"))
-
-        flash(f"Levering #{levering_id} aangemaakt.", "success")
-        return redirect(url_for("main.leveringen_overzicht"))
-
-    # GET: form datasets
-    today = date_cls.today()
-    chauffeurs_vandaag = get_beschikbare_chauffeurs(today)
-    chauffeurs_morgen = get_beschikbare_chauffeurs(today.replace(day=today.day))  # simple reuse
-
-    producten = Product.query.order_by(Product.naam.asc()).all()
-    return render_template(
-        "levering_nieuw.html",
-        chauffeurs_vandaag=chauffeurs_vandaag,
-        chauffeurs_morgen=chauffeurs_morgen,
-        producten=producten,
-        today=today,
-        workday_minutes=werkdag_minuten(),
-    )
-
-# ---- Overzicht ----
-@main.route("/leveringen")
-def leveringen_overzicht():
-    dag_str = request.args.get("datum")
-    medewerker_id = request.args.get("medewerker_id")
-    dag = datetime.strptime(dag_str, "%Y-%m-%d").date() if dag_str else None
-    mid = int(medewerker_id) if medewerker_id else None
-
-    overzicht = get_levering_overview(datum=dag, medewerker_id=mid)
-
-    # aggregate per medewerker per dag (minutes used)
-    totals = {}
-    for row in overzicht:
-        key = (row["medewerker_id"], row["datum"])
-        totals[key] = totals.get(key, 0) + int(row["tijdslot_minuten"] or 0)
-
-    return render_template("leveringen_overzicht.html", overzicht=overzicht, totals=totals, workday_minutes=werkdag_minuten())
-
-# ---- Suggesties op basis van 'gemeente' uit adres ----
-@main.route("/suggesties")
-def suggesties():
-    adres = request.args.get("adres", "")
-    municipality = extract_municipality_from_adres(adres)
-    days = suggest_delivery_days_by_municipality(municipality)
-    return render_template("suggesties.html", adres=adres, municipality=municipality, days=days)
-
-# ---------------------
-# Lightweight JSON APIs
-# ---------------------
-@main.route("/api/chauffeurs")
-def api_chauffeurs():
-    dag_str = request.args.get("datum")
-    dag = datetime.strptime(dag_str, "%Y-%m-%d").date() if dag_str else date_cls.today()
-    return jsonify({"chauffeurs": [{"id": i, "naam": n} for (i, n) in get_beschikbare_chauffeurs(dag)]})
-
-@main.route("/api/capacity")
-def api_capacity():
-    mid = int(request.args.get("medewerker_id"))
-    dag = datetime.strptime(request.args.get("datum"), "%Y-%m-%d").date()
-    used = gebruikte_minuten_op_dag(mid, dag)
-    return jsonify({"used_minutes": used, "workday_minutes": werkdag_minuten(), "remaining": max(werkdag_minuten() - used, 0)})
->>>>>>> fa763f594a89d16781ff5dc80a17f22ecaa38367
