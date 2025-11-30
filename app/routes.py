@@ -604,7 +604,7 @@ def delete_truck(run_id):
         run = DeliveryRun.query.filter_by(tenant_id=tid, run_id=run_id).first()
         if not run:
             flash("Truck niet gevonden.", "error")
-            return redirect(url_for("trucks_list"))
+            return redirect(url_for("main.trucks_list"))
         
         # Delete all deliveries associated with this run first
         Delivery.query.filter_by(tenant_id=tid, run_id=run_id).delete()
@@ -618,7 +618,7 @@ def delete_truck(run_id):
         current_app.logger.exception(f"Error deleting truck: {e}")
         flash("Kon truck niet verwijderen.", "error")
     
-    return redirect(url_for("trucks_list"))
+    return redirect(url_for("main.trucks_list"))
 
 
 # --- Drivers Management (Improved) ---
@@ -685,7 +685,7 @@ def delete_driver(employee_id):
         
         if not driver:
             flash("Chauffeur niet gevonden.", "error")
-            return redirect(url_for("drivers_list"))
+            return redirect(url_for("main.drivers_list"))
         
         # Set driver to inactive instead of deleting
         driver.active = False
@@ -696,7 +696,7 @@ def delete_driver(employee_id):
         current_app.logger.exception(f"Error deleting driver: {e}")
         flash("Kon chauffeur niet verwijderen.", "error")
     
-    return redirect(url_for("drivers_list"))
+    return redirect(url_for("main.drivers_list"))
 
 
 # --- Truck Management ---

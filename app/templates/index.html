@@ -19,7 +19,7 @@
             <div id="tabs" class="flex items-center gap-2 bg-[#ecebef] rounded-full p-1">
                 <button data-tab="dashboard" class="tab-pill active">Dashboard</button>
                 <button data-tab="plan" class="tab-pill">Levering plannen</button>
-                <button data-tab="availability" class="tab-pill">Beschikbaarheid</button>
+                <button data-tab="drivers" class="tab-pill">Beschikbare Chauffeurs</button>
             </div>
         </div>
     </div>
@@ -109,24 +109,12 @@
                 </form>
             </div>
 
-            <div id="panel-availability" class="panel card-ghost p-6 mb-6 hidden">
-                <h2 class="mb-4 font-semibold">Beschikbaarheid chauffeurs</h2>
-                <form method="POST" action="{{ url_for('main.availability') }}" class="max-w-2xl grid grid-cols-3 gap-3 items-end">
-                    <div>
-                        <label class="block text-sm text-gray-600">Datum</label>
-                        <input name="available_date" type="date" class="w-full border rounded-md p-2" required>
-                    </div>
-                    <div>
-                        <label class="block text-sm text-gray-600">Active</label>
-                        <select name="active" class="w-full border rounded-md p-2">
-                            <option value="true">Beschikbaar</option>
-                            <option value="false">Niet beschikbaar</option>
-                        </select>
-                    </div>
-                    <div>
-                        <button class="w-full bg-black text-white py-2 rounded">+ Beschikbaarheid toevoegen</button>
-                    </div>
-                </form>
+            <div id="panel-drivers" class="panel card-ghost p-6 mb-6 hidden">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="font-semibold">Beschikbare Chauffeurs</h2>
+                    <a href="{{ url_for('main.drivers_list') }}" class="text-blue-600 hover:underline text-sm">Bekijk volledige lijst →</a>
+                </div>
+                <iframe src="{{ url_for('main.drivers_list') }}" style="width: 100%; height: 500px; border: none; border-radius: 8px;"></iframe>
             </div>
 
             <div id="panel-add-driver" class="panel card-ghost p-6 mb-6 hidden">
@@ -210,7 +198,7 @@
                 document.querySelectorAll('.panel').forEach(p => p.classList.add('hidden'));
                 if (show === 'dashboard') document.getElementById('panel-dashboard').classList.remove('hidden');
                 if (show === 'plan') document.getElementById('panel-plan').classList.remove('hidden');
-                if (show === 'availability') document.getElementById('panel-availability').classList.remove('hidden');
+                if (show === 'drivers') document.getElementById('panel-drivers').classList.remove('hidden');
                 if (show === 'add-driver') document.getElementById('panel-add-driver').classList.remove('hidden');
                 if (show === 'add-truck') document.getElementById('panel-add-truck').classList.remove('hidden');
             });
