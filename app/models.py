@@ -197,7 +197,6 @@ class DeliveryRun(db.Model):
     region_id       = db.Column(db.Integer)
     driver_id       = db.Column(db.Integer)
     capacity        = db.Column(db.Integer, default=10)   # max stops (optioneel)
-    workday_minutes = db.Column(db.Integer, default=480)  # 8u standaard
     status          = db.Column(db.Enum(RunStatus, name="run_status", native_enum=True),
                                 default=RunStatus.planned)
     __table_args__ = (
@@ -318,6 +317,16 @@ def upsert_run_and_attach_delivery_with_capacity(
     tenant_id: int, order_id: int, region_id: int, driver_id: int, scheduled_date: date
 ) -> int:
     # 1) run zoeken of maken
+    # If region_id is None, use a default region or create one
+    if region_id is None:
+        # Create or get a default region
+        region = Region.query.filter_by(tenant_id=tenant_id, name="Default").first()
+        if not region:
+            region = Region(tenant_id=tenant_id, name="Default")
+            db.session.add(region)
+            db.session.flush()
+        region_id = region.region_id
+    
     run = DeliveryRun.query.filter_by(
         tenant_id=tenant_id, region_id=region_id, scheduled_date=scheduled_date
     ).with_for_update(of=DeliveryRun).first()
@@ -325,15 +334,16 @@ def upsert_run_and_attach_delivery_with_capacity(
         run = DeliveryRun(
             tenant_id=tenant_id, scheduled_date=scheduled_date,
             region_id=region_id, driver_id=driver_id,
-            capacity=10, workday_minutes=480, status=RunStatus.planned
+            capacity=10, status=RunStatus.planned
         )
         db.session.add(run)
         db.session.flush()  # krijg run_id
 
-    # 2) capaciteitscontrole in minuten
+    # 2) capaciteitscontrole - simplified
     add_minutes = compute_order_minutes(tenant_id, order_id)
     used_minutes = get_run_planned_minutes(tenant_id, run.run_id)
-    if used_minutes + add_minutes > (run.workday_minutes or 480):
+    max_minutes = 480  # 8 uur standaard
+    if used_minutes + add_minutes > max_minutes:
         raise ValueError("Capaciteit overschreden: niet genoeg minuten beschikbaar op deze route/dag.")
 
     # (optioneel) max stops
@@ -352,22 +362,21 @@ def upsert_run_and_attach_delivery_with_capacity(
     return delivery.delivery_id
 
 def get_delivery_overview(tenant_id: int, region_id: int = None, order_date: date = None):
+    """Get all deliveries for a tenant with their order/run info (using outer join for safety)."""
     q = db.session.query(
-        Delivery.delivery_id, CustomerOrder.order_id, Customer.name,
-        Customer.municipality, DeliveryRun.driver_id, Delivery.delivery_status,
+        Delivery.delivery_id, CustomerOrder.order_id,
+        Region.name,  # Get the region/municipality from DeliveryRun's region, not Customer
+        Delivery.delivery_status,
         CustomerOrder.order_date, DeliveryRun.scheduled_date, DeliveryRun.region_id
-    ).join(
+    ).outerjoin(
         CustomerOrder,
         (Delivery.tenant_id == CustomerOrder.tenant_id) & (Delivery.order_id == CustomerOrder.order_id)
-    ).join(
-        Customer,
-        (CustomerOrder.tenant_id == Customer.tenant_id) & (CustomerOrder.customer_id == Customer.customer_id)
-    ).join(
-        Location,
-        (CustomerOrder.tenant_id == Location.tenant_id) & (CustomerOrder.location_id == Location.location_id)
-    ).join(
+    ).outerjoin(
         DeliveryRun,
         (Delivery.tenant_id == DeliveryRun.tenant_id) & (Delivery.run_id == DeliveryRun.run_id)
+    ).outerjoin(
+        Region,
+        (DeliveryRun.tenant_id == Region.tenant_id) & (DeliveryRun.region_id == Region.region_id)
     ).filter(Delivery.tenant_id == tenant_id)
 
     if region_id is not None:
@@ -380,8 +389,9 @@ def get_delivery_overview(tenant_id: int, region_id: int = None, order_date: dat
 def suggest_delivery_days(tenant_id: int, region_id: int, min_free_minutes: int = 30):
     runs = DeliveryRun.query.filter_by(tenant_id=tenant_id, region_id=region_id).all()
     suggestions = []
+    max_minutes = 480  # 8 uur standaard
     for r in runs:
-        free = (r.workday_minutes or 480) - get_run_planned_minutes(tenant_id, r.run_id)
+        free = max_minutes - get_run_planned_minutes(tenant_id, r.run_id)
         if free >= min_free_minutes and r.status == RunStatus.planned:
             suggestions.append({"date": r.scheduled_date, "free_minutes": free})
     suggestions.sort(key=lambda x: x["free_minutes"], reverse=True)

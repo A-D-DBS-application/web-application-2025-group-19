@@ -20,7 +20,6 @@
                 <button data-tab="dashboard" class="tab-pill active">Dashboard</button>
                 <button data-tab="plan" class="tab-pill">Levering plannen</button>
                 <button data-tab="availability" class="tab-pill">Beschikbaarheid</button>
-                <button data-tab="trucks" class="tab-pill">Trucks</button>
             </div>
         </div>
     </div>
@@ -28,41 +27,85 @@
     <div class="grid grid-cols-12 gap-6">
         <section class="col-span-9">
             <div id="panel-dashboard" class="panel card-ghost p-6 mb-6">
-                <div class="grid grid-cols-4 gap-4">
-                    <div class="p-4 bg-white rounded shadow-sm border"> 
+                <div class="grid grid-cols-3 gap-4">
+                    <a href="{{ url_for('main.listings') }}" class="p-4 bg-white rounded shadow-sm border block hover:bg-gray-50"> 
                         <h3 class="text-sm text-gray-500">Geplande Leveringen</h3>
-                        <div class="text-3xl font-bold">0</div>
-                        <div class="text-xs text-gray-400">Deze week • Volgende week: 0</div>
-                    </div>
-                    <div class="p-4 bg-white rounded shadow-sm border">
-                        <h3 class="text-sm text-gray-500">Beschikbare Trucks</h3>
-                        <div class="text-3xl font-bold">0</div>
-                        <div class="text-xs text-gray-400">0 onderweg</div>
-                    </div>
-                    <div class="p-4 bg-white rounded shadow-sm border">
+                        <div class="text-3xl font-bold">{{ deliveries_this_week }}</div>
+                        <div class="text-xs text-gray-400">Deze week</div>
+                    </a>
+                    <a href="{{ url_for('main.drivers_list') }}" class="p-4 bg-white rounded shadow-sm border block hover:bg-gray-50">
                         <h3 class="text-sm text-gray-500">Beschikbare Chauffeurs</h3>
-                        <div class="text-3xl font-bold">0</div>
-                        <div class="text-xs text-gray-400">Vandaag beschikbaar</div>
-                    </div>
-                    <div class="p-4 bg-white rounded shadow-sm border">
-                        <h3 class="text-sm text-gray-500">Actieve Routes</h3>
-                        <div class="text-3xl font-bold">0</div>
-                        <div class="text-xs text-gray-400">Op dit moment</div>
-                    </div>
+                        <div class="text-3xl font-bold">{{ available_drivers }}</div>
+                        <div class="text-xs text-gray-400">Actief</div>
+                    </a>
+                    <a href="{{ url_for('main.trucks_list') }}" class="p-4 bg-white rounded shadow-sm border block hover:bg-gray-50">
+                        <h3 class="text-sm text-gray-500">Beschikbare Trucks</h3>
+                        <div class="text-3xl font-bold">{{ available_trucks }}</div>
+                        <div class="text-xs text-gray-400">Geplande routes</div>
+                    </a>
                 </div>
-                <div class="mt-6 bg-white rounded p-4 border h-48">Aankomende Leveringen</div>
+                <div class="mt-6 bg-white rounded p-4 border">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="font-semibold">Aankomende Leveringen</h3>
+                        <a href="{{ url_for('main.listings') }}" class="text-xs text-blue-600 hover:underline">Bekijk alle →</a>
+                    </div>
+                    {% if upcoming_deliveries %}
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm border-collapse">
+                                <thead>
+                                    <tr class="bg-gray-50 border-b">
+                                        <th class="text-left p-2 font-semibold text-gray-700">Gemeente</th>
+                                        <th class="text-left p-2 font-semibold text-gray-700">Order ID</th>
+                                        <th class="text-left p-2 font-semibold text-gray-700">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for delivery in upcoming_deliveries[:5] %}
+                                        <tr class="border-b hover:bg-gray-50">
+                                            <td class="p-2 text-gray-800">{{ delivery.municipality or 'N/A' }}</td>
+                                            <td class="p-2 text-gray-800 font-medium">{{ delivery.order_id }}</td>
+                                            <td class="p-2">
+                                                <span class="inline-block px-2 py-1 text-xs rounded 
+                                                    {% if delivery.delivery_status == 'scheduled' %}
+                                                        bg-blue-100 text-blue-800
+                                                    {% elif delivery.delivery_status == 'delivered' %}
+                                                        bg-green-100 text-green-800
+                                                    {% else %}
+                                                        bg-gray-100 text-gray-800
+                                                    {% endif %}">
+                                                    {{ delivery.delivery_status }}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <p class="text-gray-500 text-sm">Geen aankomende leveringen</p>
+                    {% endif %}
+                </div>
             </div>
 
             <div id="panel-plan" class="panel card-ghost p-6 mb-6 hidden">
                 <h2 class="mb-4 font-semibold">Levering plannen</h2>
                 <form method="POST" action="{{ url_for('main.schedule') }}" class="max-w-md">
-                    <label class="block text-sm text-gray-600">Selecteer leveringsdatum</label>
-                    <input type="date" name="scheduled_date" class="w-full border rounded-md p-2 my-2" required>
-                    <label class="block text-sm text-gray-600">Order ID</label>
-                    <input name="order_id" type="number" class="w-full border rounded-md p-2 my-2" placeholder="Voer order ID in" required>
-                    <label class="block text-sm text-gray-600">Regio (optioneel)</label>
-                    <input name="region_id" type="number" class="w-full border rounded-md p-2 my-2" placeholder="Regio ID">
-                    <button class="mt-3 w-full bg-black text-white py-2 rounded">Levering plannen</button>
+                    <div class="mb-4">
+                        <label class="block text-sm text-gray-600 mb-1">Selecteer leveringsdatum *</label>
+                        <input type="date" name="scheduled_date" class="w-full border rounded-md p-2" required>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label class="block text-sm text-gray-600 mb-1">Product ID *</label>
+                        <input type="number" name="order_id" placeholder="Voer product ID in" class="w-full border rounded-md p-2" required>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label class="block text-sm text-gray-600 mb-1">Gemeente (optioneel)</label>
+                        <input type="text" name="region_id" placeholder="Bijv. Brussel, Antwerpen..." class="w-full border rounded-md p-2">
+                    </div>
+                    
+                    <button type="submit" class="mt-3 w-full bg-black text-white py-2 rounded hover:bg-gray-800">Levering plannen</button>
                 </form>
             </div>
 
@@ -86,34 +129,58 @@
                 </form>
             </div>
 
-            <div id="panel-trucks" class="panel card-ghost p-6 mb-6 hidden">
-                <h2 class="mb-4 font-semibold">Truck Overzicht</h2>
-                <div class="bg-white rounded p-6 text-center text-gray-500">Geen trucks beschikbaar<br><small class="text-xs">Ga naar "Levering plannen" om trucks toe te voegen</small></div>
+            <div id="panel-add-driver" class="panel card-ghost p-6 mb-6 hidden">
+                <h2 class="mb-4 font-semibold">Chauffeur toevoegen</h2>
+                <form method="POST" action="{{ url_for('main.add_driver') }}" class="max-w-md">
+                    <div class="mb-3">
+                        <label class="block text-sm text-gray-600 mb-1">Voornaam *</label>
+                        <input type="text" name="first_name" class="w-full border rounded-md p-2" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="block text-sm text-gray-600 mb-1">Achternaam *</label>
+                        <input type="text" name="last_name" class="w-full border rounded-md p-2" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="block text-sm text-gray-600 mb-1">E-mail *</label>
+                        <input type="email" name="email" class="w-full border rounded-md p-2" required>
+                    </div>
+                    <button type="submit" class="mt-3 w-full bg-black text-white py-2 rounded hover:bg-gray-800">+ Chauffeur toevoegen</button>
+                </form>
             </div>
+
+
         </section>
 
         <aside class="col-span-3">
             <div class="card-ghost p-4 mb-6">
-                <h3 class="font-semibold">Snelle Acties</h3>
-                <ul class="mt-3 space-y-2 text-sm text-gray-600">
-                    <li><a href="#" class="block p-2 border rounded">Nieuwe Levering Plannen</a></li>
-                    <li><a href="#" class="block p-2 border rounded">Chauffeur Toevoegen</a></li>
-                    <li><a href="#" class="block p-2 border rounded">Truck Beheren</a></li>
+                <h3 class="font-semibold mb-3">Snelle Acties</h3>
+                <ul class="space-y-2">
+                    <li><button onclick="switchTab('plan')" class="w-full text-left px-4 py-2 border rounded bg-white hover:bg-blue-50 text-gray-700 font-medium transition">+ Nieuwe Levering Plannen</button></li>
+                    <li><button onclick="switchTab('add-driver')" class="w-full text-left px-4 py-2 border rounded bg-white hover:bg-green-50 text-gray-700 font-medium transition">+ Chauffeur Toevoegen</button></li>
                 </ul>
             </div>
 
             <div class="card-ghost p-4">
-                <h3 class="font-semibold">Vandaag</h3>
+                <h3 class="font-semibold">Samenvatting</h3>
                 <dl class="mt-3 text-sm text-gray-600">
-                    <div class="flex justify-between"><dt>Leveringen</dt><dd>0</dd></div>
-                    <div class="flex justify-between"><dt>Actieve Trucks</dt><dd>0</dd></div>
-                    <div class="flex justify-between"><dt>Beschikbare Chauffeurs</dt><dd>0</dd></div>
+                    <div class="flex justify-between"><dt>Geplande Leveringen</dt><dd>{{ deliveries_this_week }}</dd></div>
+                    <div class="flex justify-between"><dt>Beschikbare Trucks</dt><dd>{{ available_trucks }}</dd></div>
+                    <div class="flex justify-between"><dt>Beschikbare Chauffeurs</dt><dd>{{ available_drivers }}</dd></div>
                 </dl>
             </div>
         </aside>
     </div>
 
     <script>
+        function switchTab(tabName) {
+            // Find and click the corresponding tab button
+            document.querySelectorAll('#tabs [data-tab]').forEach(btn => {
+                if (btn.getAttribute('data-tab') === tabName) {
+                    btn.click();
+                }
+            });
+        }
+
         document.querySelectorAll('#tabs [data-tab]').forEach(btn => {
             btn.addEventListener('click', () => {
                 document.querySelectorAll('#tabs [data-tab]').forEach(b => b.classList.remove('active'));
@@ -123,7 +190,7 @@
                 if (show === 'dashboard') document.getElementById('panel-dashboard').classList.remove('hidden');
                 if (show === 'plan') document.getElementById('panel-plan').classList.remove('hidden');
                 if (show === 'availability') document.getElementById('panel-availability').classList.remove('hidden');
-                if (show === 'trucks') document.getElementById('panel-trucks').classList.remove('hidden');
+                if (show === 'add-driver') document.getElementById('panel-add-driver').classList.remove('hidden');
             });
         });
     </script>
