@@ -40,14 +40,17 @@ def tenant_id() -> int:
 # --- Home (index) ---
 @main.route("/", methods=["GET"])
 def index():
+    # Als gebruiker niet is ingelogd -> stuur naar login pagina
+    if "employee_id" not in session:
+        return redirect(url_for("main.login"))
+
     username = session.get("username")
     listings = []
-    if "employee_id" in session:
-        rows = (db.session.query(CustomerOrder.order_id, CustomerOrder.order_date)
-                .filter_by(tenant_id=tenant_id(), seller_id=session["employee_id"])
-                .order_by(CustomerOrder.order_date.desc())
-                .all())
-        listings = [{"listing_name": f"Order #{oid}", "price": 0.00} for (oid, _) in rows]
+    rows = (db.session.query(CustomerOrder.order_id, CustomerOrder.order_date)
+            .filter_by(tenant_id=tenant_id(), seller_id=session["employee_id"])
+            .order_by(CustomerOrder.order_date.desc())
+            .all())
+    listings = [{"listing_name": f"Order #{oid}", "price": 0.00} for (oid, _) in rows]
     return render_template("index.html", username=username, listings=listings)
 
 # --- All listings (geplande deliveries) ---

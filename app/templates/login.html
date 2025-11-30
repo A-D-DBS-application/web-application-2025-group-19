@@ -1,55 +1,27 @@
-<!DOCTYPE html>
-<html lang="nl">
-<head>
-    <meta charset="UTF-8">
-    <title>Inloggen</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
+{% extends 'base.html' %}
+{% block title %}Inloggen — Delivery Schedule{% endblock %}
 
-<body class="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-
-<div class="w-full max-w-md bg-white rounded-lg shadow-lg p-8">
-
-    <!-- Icon -->
-    <div class="flex justify-center mb-6">
-        <div class="w-14 h-14 bg-black rounded-2xl flex items-center justify-center">
-            <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" stroke-width="2"
-                 viewBox="0 0 24 24">
-                <path d="M3 17V7a2 2 0 012-2h11a2 2 0 012 2v10m-2 0h3m-3 0a3 3 0 11-6 0m6 0H9m0 0a3 3 0 11-6 0m6 0H5"/>
-            </svg>
+{% block content %}
+    <div class="max-w-md mx-auto bg-white rounded-lg shadow p-8">
+        <div class="flex justify-center mb-4">
+            <div class="w-14 h-14 bg-black rounded-2xl flex items-center justify-center text-white">
+                <svg class="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 17V7a2 2 0 012-2h11a2 2 0 012 2v10m-2 0h3m-3 0a3 3 0 11-6 0m6 0H9m0 0a3 3 0 11-6 0m6 0H5"/></svg>
+            </div>
         </div>
+        <h1 class="text-center mb-4 text-xl font-semibold">Leveringsplanning – Inloggen</h1>
+
+        <form method="POST" action="{{ url_for('main.login') }}" class="space-y-4">
+            <div>
+                <label class="block text-sm text-gray-600">Gebruikersnaam <span class="text-gray-400">(voornaam.achternaam)</span></label>
+                <input name="username" type="text" class="w-full border rounded-md px-3 py-2" required>
+            </div>
+            <div>
+                <label class="block text-sm text-gray-600">Wachtwoord</label>
+                <input name="password" type="password" class="w-full border rounded-md px-3 py-2" required>
+            </div>
+            <button class="w-full bg-black text-white py-2 rounded">Inloggen</button>
+            <p class="text-center text-sm mt-3">Nog geen account? <a href="{{ url_for('main.register') }}" class="text-blue-600">Registreren</a></p>
+        </form>
     </div>
-
-    <h1 class="text-center mb-6 text-xl font-semibold">Leveringsplanning – Inloggen</h1>
-
-    <form method="POST" action="{{ url_for('main.login') }}" class="space-y-4">
-
-        <div class="space-y-2">
-            <label for="login-username">
-                Gebruikersnaam <span class="text-gray-500 italic">(voornaam.achternaam)</span>
-            </label>
-            <input id="login-username" name="username" type="text"
-                   class="w-full border rounded-md px-3 py-2" placeholder="Type here ..." required>
-        </div>
-
-        <div class="space-y-2">
-            <label for="login-password">Wachtwoord</label>
-            <input id="login-password" name="password" type="password"
-                   class="w-full border rounded-md px-3 py-2" placeholder="Type here ..." required>
-        </div>
-
-        <button class="w-full bg-black text-white py-2 rounded-md hover:bg-gray-800">
-            Inloggen
-        </button>
-
-        <p class="text-center text-sm mt-4">
-            Nog geen account?
-            <a href="{{ url_for('main.register') }}" class="text-blue-600">Registreren</a>
-        </p>
-
-    </form>
-</div>
-
-</body>
-</html>
+{% endblock %}
 

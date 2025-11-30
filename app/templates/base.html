@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{% block title %}Delivery Schedule{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    /* Global small polish for a professional look */
+    body { background: #f8fafb; }
+    .brand { font-weight:700; letter-spacing: -0.2px; }
+    .nav-pill { padding:6px 18px; border-radius:9999px; background:#ecebef; }
+    .nav-pill.active { background:#fff; box-shadow: 0 0 0 3px rgba(0,0,0,0.03) inset; border:1px solid #e0e0e0; }
+    .card-ghost { background:#fff; border:1px solid #f0f0f0; border-radius:10px; }
+  </style>
+</head>
+<body class="min-h-screen">
+  <header class="border-b bg-white">
+    <div class="container mx-auto px-4 py-4 flex items-center">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 bg-black text-white rounded-md flex items-center justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 13.5V6a1 1 0 011-1h11v8.5m0 0h2.5L21 9.5V14M15 13.5H6m13 4a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"/></svg>
+        </div>
+        <div class="brand text-lg">Delivery Schedule</div>
+      </div>
+      <nav class="ms-auto">
+        {% if session.username %}
+          <span class="me-4 text-sm text-gray-600">{{ session.username }}</span>
+          <form class="d-inline" method="POST" action="{{ url_for('main.logout') }}">
+            <button class="btn btn-link btn-sm">Uitloggen</button>
+          </form>
+        {% else %}
+          <a class="btn btn-outline-primary btn-sm me-2" href="{{ url_for('main.login') }}">Inloggen</a>
+          <a class="btn btn-primary btn-sm" href="{{ url_for('main.register') }}">Registreren</a>
+        {% endif %}
+      </nav>
+    </div>
+  </header>
+
+  <main class="container mx-auto px-4 py-8">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="mb-4">
+          {% for category, msg in messages %}
+            <div class="alert alert-{{ 'danger' if category=='error' else ('success' if category=='success' else 'info') }}">{{ msg }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="text-center text-sm text-gray-500 py-6">
+    &copy; {{ current_year if current_year is defined else 2025 }} Delivery Schedule — Built for demo
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
