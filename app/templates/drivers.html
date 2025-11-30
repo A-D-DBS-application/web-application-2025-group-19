@@ -14,7 +14,7 @@
           <tr class="bg-gray-100 border-b">
             <th class="text-left p-4 font-semibold text-gray-700">Naam</th>
             <th class="text-left p-4 font-semibold text-gray-700">E-mail</th>
-            <th class="text-left p-4 font-semibold text-gray-700">Beschikbaarheid Vandaag</th>
+            <th class="text-left p-4 font-semibold text-gray-700">Beschikbaarheidsdatum</th>
             <th class="text-left p-4 font-semibold text-gray-700">ID</th>
             <th class="text-center p-4 font-semibold text-gray-700">Acties</th>
           </tr>
@@ -24,20 +24,7 @@
             <tr class="border-b hover:bg-gray-50 transition">
               <td class="p-4 text-gray-800 font-medium">{{ driver.name }}</td>
               <td class="p-4 text-gray-600">{{ driver.email or 'Geen e-mail' }}</td>
-              <td class="p-4">
-                <span class="inline-block px-3 py-1 text-xs font-medium rounded-full 
-                  {% if driver.available_today %}
-                    bg-green-100 text-green-800
-                  {% else %}
-                    bg-gray-100 text-gray-800
-                  {% endif %}">
-                  {% if driver.available_today %}
-                    ✓ Beschikbaar
-                  {% else %}
-                    Niet beschikbaar
-                  {% endif %}
-                </span>
-              </td>
+              <td class="p-4 text-gray-600 text-sm">{{ driver.available_date }}</td>
               <td class="p-4 text-gray-500 text-sm">{{ driver.employee_id }}</td>
               <td class="p-4 text-center">
                 <form method="POST" action="{{ url_for('main.delete_driver', employee_id=driver.employee_id) }}" style="display: inline;" onsubmit="return confirm('Weet je zeker dat je deze chauffeur wilt verwijderen?');">

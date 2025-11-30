@@ -1,6 +1,6 @@
 
 # app/routes.py
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 from decimal import Decimal
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash, current_app, jsonify
 from .models import (
@@ -60,11 +60,15 @@ def index():
             Delivery.delivery_status == 'scheduled'
         ).scalar() or 0
 
-        # 2. Beschikbare chauffeurs vandaag (count active drivers)
-        available_drivers = db.session.query(db.func.count(Employee.employee_id)).filter(
+        # 2. Beschikbare chauffeurs vandaag (count active drivers with availability today)
+        available_drivers = db.session.query(db.func.count(Employee.employee_id)).outerjoin(
+            Availability,
+            (Employee.employee_id == Availability.employee_id) & (Availability.available_date == today)
+        ).filter(
             Employee.tenant_id == tid,
             Employee.role == EmployeeRole.driver,
-            Employee.active.is_(True)
+            Employee.active.is_(True),
+            Availability.active.is_(True)
         ).scalar() or 0
 
         # 3. Beschikbare trucks (count planned delivery runs)
@@ -391,6 +395,7 @@ def add_driver():
     first = request.form.get("first_name", "").strip()
     last = request.form.get("last_name", "").strip()
     email = request.form.get("email", "").strip().lower()
+    availability_date_str = request.form.get("availability_date", "").strip()
 
     if not first or not last or not email:
         flash("Vul voornaam, achternaam en e-mail in.", "error")
@@ -410,11 +415,18 @@ def add_driver():
         db.session.add(emp)
         db.session.flush()  # Get the employee_id before commit
         
-        # Make the new driver available today by default so they appear in the dashboard
-        today = date.today()
+        # Set availability based on user input or use today as default
+        if availability_date_str:
+            try:
+                availability_date = datetime.strptime(availability_date_str, "%Y-%m-%d").date()
+            except ValueError:
+                availability_date = date.today()
+        else:
+            availability_date = date.today()
+        
         try:
-            set_employee_availability(tid, emp.employee_id, today, active=True)
-            current_app.logger.info(f"Added driver {first} {last} with availability for {today}")
+            set_employee_availability(tid, emp.employee_id, availability_date, active=True)
+            current_app.logger.info(f"Added driver {first} {last} with availability for {availability_date}")
         except Exception as e:
             current_app.logger.exception(f"Failed to set availability for new driver: {e}")
             # Still commit the driver even if availability fails
@@ -423,7 +435,7 @@ def add_driver():
             return redirect(url_for("main.index"))
         
         db.session.commit()
-        flash(f"Chauffeur {first} {last} toegevoegd en beschikbaar gemaakt voor vandaag.", "success")
+        flash(f"Chauffeur {first} {last} toegevoegd en beschikbaar gemaakt voor {availability_date.strftime('%d-%m-%Y')}.", "success")
     except Exception as e:
         db.session.rollback()
         current_app.logger.exception(f"Error adding driver: {e}")
@@ -554,13 +566,23 @@ def trucks_list():
                 tenant_id=tid, region_id=truck.region_id
             ).first()
             
+            # Get driver name if assigned
+            driver_name = None
+            if truck.driver_id:
+                driver = db.session.query(Employee).filter_by(
+                    tenant_id=tid, employee_id=truck.driver_id
+                ).first()
+                if driver:
+                    driver_name = f"{driver.first_name} {driver.last_name}"
+            
             truck_list.append({
                 "run_id": truck.run_id,
-                "region": region.name if region else 'N/A',
-                "date": truck.scheduled_date,
+                "region": region.name if region else 'Niet ingesteld',
+                "scheduled_date": truck.scheduled_date,
                 "driver_id": truck.driver_id,
+                "driver_name": driver_name or 'Niet toegewezen',
                 "capacity": truck.capacity,
-                "deliveries": delivery_count
+                "delivery_count": delivery_count
             })
     except Exception as e:
         current_app.logger.exception(f"Error fetching trucks: {e}")
@@ -610,29 +632,36 @@ def drivers_list():
     today = date.today()
     
     try:
-        # Get all active drivers
-        drivers = db.session.query(Employee).filter(
+        # Get all active drivers with their availability info
+        drivers = db.session.query(
+            Employee.employee_id,
+            Employee.first_name,
+            Employee.last_name,
+            Employee.email,
+            Availability.available_date,
+            Availability.active.label('is_available')
+        ).outerjoin(
+            Availability,
+            (Employee.employee_id == Availability.employee_id) & (Availability.available_date >= today)
+        ).filter(
             Employee.tenant_id == tid,
             Employee.role == EmployeeRole.driver,
             Employee.active.is_(True)
-        ).order_by(Employee.last_name.asc()).all()
+        ).order_by(Employee.last_name.asc(), Availability.available_date.asc()).all()
         
         driver_list = []
-        for driver in drivers:
-            # Check if available today
-            availability = db.session.query(Availability).filter_by(
-                tenant_id=tid,
-                employee_id=driver.employee_id,
-                available_date=today,
-                active=True
-            ).first()
-            
-            driver_list.append({
-                "employee_id": driver.employee_id,
-                "name": f"{driver.first_name} {driver.last_name}",
-                "email": driver.email,
-                "available_today": bool(availability)
-            })
+        seen_ids = set()  # To avoid duplicates
+        for row in drivers:
+            emp_id = row.employee_id
+            if emp_id not in seen_ids:
+                seen_ids.add(emp_id)
+                driver_list.append({
+                    "employee_id": emp_id,
+                    "name": f"{row.first_name} {row.last_name}",
+                    "email": row.email,
+                    "available_date": row.available_date.strftime('%d-%m-%Y') if row.available_date else 'Niet ingesteld',
+                    "available_today": row.is_available and row.available_date == today if row.available_date else False
+                })
     except Exception as e:
         current_app.logger.exception(f"Error fetching drivers: {e}")
         driver_list = []
@@ -669,3 +698,47 @@ def delete_driver(employee_id):
     
     return redirect(url_for("drivers_list"))
 
+
+# --- Truck Management ---
+@main.route("/add-truck", methods=["POST"])
+def add_truck():
+    """Add a new truck (delivery run) with specified date and capacity."""
+    if "employee_id" not in session:
+        return redirect(url_for("main.login"))
+    
+    tid = tenant_id()
+    scheduled_date_str = request.form.get("scheduled_date", "").strip()
+    capacity_str = request.form.get("capacity", "").strip()
+    
+    if not scheduled_date_str or not capacity_str:
+        flash("Selecteer alstublieft een datum en voer capaciteit in.", "error")
+        return redirect(url_for("main.index"))
+    
+    try:
+        scheduled_date = datetime.strptime(scheduled_date_str, "%Y-%m-%d").date()
+        capacity = int(capacity_str)
+        
+        if capacity <= 0:
+            raise ValueError("Capaciteit moet groter dan 0 zijn.")
+        
+        # Create new delivery run (truck)
+        run = DeliveryRun(
+            tenant_id=tid,
+            scheduled_date=scheduled_date,
+            capacity=capacity,
+            status=RunStatus.planned
+        )
+        db.session.add(run)
+        db.session.commit()
+        
+        flash(f"Truck toegevoegd voor {scheduled_date.strftime('%d-%m-%Y')} met capaciteit {capacity}.", "success")
+        current_app.logger.info(f"Added truck for {scheduled_date} with capacity {capacity}")
+    except ValueError as e:
+        current_app.logger.error(f"Invalid input for truck: {e}")
+        flash(f"Ongeldige invoer: {e}", "error")
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.exception(f"Error adding truck: {e}")
+        flash("Fout bij het toevoegen van truck.", "error")
+    
+    return redirect(url_for("main.index"))
