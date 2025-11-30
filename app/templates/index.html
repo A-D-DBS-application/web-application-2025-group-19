@@ -109,13 +109,34 @@
                 </form>
             </div>
 
-            <div id="panel-drivers" class="panel card-ghost p-6 mb-6 hidden">
-                <div class="flex items-center justify-between mb-4">
-                    <h2 class="font-semibold">Beschikbare Chauffeurs</h2>
-                    <a href="{{ url_for('main.drivers_list') }}" class="text-blue-600 hover:underline text-sm">Bekijk volledige lijst →</a>
-                </div>
-                <iframe src="{{ url_for('main.drivers_list') }}" style="width: 100%; height: 500px; border: none; border-radius: 8px;"></iframe>
-            </div>
+                        <div id="panel-drivers" class="panel card-ghost p-6 mb-6 hidden">
+                                <div class="flex items-center justify-between mb-4">
+                                        <h2 class="font-semibold">Beschikbare Chauffeurs</h2>
+                                        <a href="{{ url_for('main.drivers_list') }}" class="text-blue-600 hover:underline text-sm">Bekijk volledige lijst →</a>
+                                </div>
+                                {% if drivers_list %}
+                                    <div class="overflow-x-auto">
+                                        <table class="w-full text-sm border-collapse">
+                                            <thead>
+                                                <tr class="bg-gray-50 border-b">
+                                                    <th class="text-left p-2 font-semibold text-gray-700">Naam</th>
+                                                    <th class="text-left p-2 font-semibold text-gray-700">Beschikbaarheidsdatum</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for d in drivers_list %}
+                                                    <tr class="border-b hover:bg-gray-50">
+                                                        <td class="p-2 text-gray-800">{{ d.name }}</td>
+                                                        <td class="p-2 text-gray-700">{{ d.available_date }}</td>
+                                                    </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                {% else %}
+                                    <p class="text-gray-500">Geen chauffeurs beschikbaar</p>
+                                {% endif %}
+                        </div>
 
             <div id="panel-add-driver" class="panel card-ghost p-6 mb-6 hidden">
                 <h2 class="mb-4 font-semibold">Chauffeur toevoegen</h2>

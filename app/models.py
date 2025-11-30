@@ -331,10 +331,13 @@ def upsert_run_and_attach_delivery_with_capacity(
         tenant_id=tenant_id, region_id=region_id, scheduled_date=scheduled_date
     ).with_for_update(of=DeliveryRun).first()
     if not run:
+        # When attaching a delivery via scheduling, mark the run as active so it
+        # does not count as an available (manually added) truck. Manually added
+        # trucks created via the add-truck UI will use RunStatus.planned.
         run = DeliveryRun(
             tenant_id=tenant_id, scheduled_date=scheduled_date,
             region_id=region_id, driver_id=driver_id,
-            capacity=10, status=RunStatus.planned
+            capacity=10, status=RunStatus.active
         )
         db.session.add(run)
         db.session.flush()  # krijg run_id

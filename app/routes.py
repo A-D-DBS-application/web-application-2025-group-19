@@ -105,7 +105,22 @@ def index():
             Employee.role == EmployeeRole.driver,
             Employee.active.is_(True)
         ).order_by(Employee.last_name.asc()).limit(12).all()
-        drivers_list = [{"id": d.employee_id, "name": f"{d.first_name} {d.last_name}"} for d in driver_rows]
+        drivers_list = []
+        for d in driver_rows:
+            # fetch the next availability date for this driver (if any)
+            avail = db.session.query(Availability).filter_by(
+                tenant_id=tid,
+                employee_id=d.employee_id
+            ).order_by(Availability.available_date.asc()).first()
+            if avail and avail.available_date:
+                avail_str = avail.available_date.strftime('%d-%m-%Y')
+            else:
+                avail_str = 'Niet ingesteld'
+            drivers_list.append({
+                "employee_id": d.employee_id,
+                "name": f"{d.first_name} {d.last_name}",
+                "available_date": avail_str
+            })
     except Exception as e:
         current_app.logger.error(f"Drivers query failed: {e}")
         drivers_list = []
