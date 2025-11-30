@@ -1,55 +1,175 @@
 <!DOCTYPE html>
 <html lang="nl">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    
-    <!-- Bootstrap -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    
-    <title>Leveringsplanning</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Leveringsplanning</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+        <style>
+            /* Kleine aanpassingen om de look zoals mockups te benaderen */
+            .tab-pill { padding: 8px 22px; border-radius: 9999px; background:#ecebef; }
+            .tab-pill.active { background: #fff; box-shadow: 0 0 0 3px rgba(0,0,0,0.06) inset; border:1px solid #d6d6d6; }
+            .card-ghost { border-radius: 12px; border:1px solid #eee; background:#fff; }
+        </style>
 </head>
-<body class="bg-slate-50 min-h-screen flex items-center justify-center p-4">
+<body class="bg-slate-50 min-h-screen p-6">
 
-<div class="w-full max-w-md bg-white rounded-lg shadow-lg p-8">
-
-    <!-- Icon -->
-    <div class="flex justify-center mb-6">
-        <div class="w-14 h-14 bg-black rounded-2xl flex items-center justify-center">
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M3 13.5V6a1 1 0 011-1h11v8.5m0 0h2.5L21 9.5V14M15 13.5H6m13 4a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm-12 0a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
-            </svg>
+{% if not username %}
+    <!-- Niet ingelogd: eenvoudige landingspagina met login/register -->
+    <div class="max-w-md mx-auto bg-white rounded-lg shadow p-8 mt-12">
+        <div class="flex justify-center mb-6">
+            <div class="w-14 h-14 bg-black rounded-2xl flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 13.5V6a1 1 0 011-1h11v8.5m0 0h2.5L21 9.5V14M15 13.5H6m13 4a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
+                </svg>
+            </div>
+        </div>
+        <h1 class="text-center mb-4 text-xl font-semibold">Leveringsplanning</h1>
+        <p class="text-center text-gray-600 mb-6">Welkom — log in of registreer om verder te gaan.</p>
+        <div class="space-y-3">
+            <a href="{{ url_for('main.login') }}" class="w-full block bg-black text-white py-3 rounded-md text-center">Inloggen</a>
+            <a href="{{ url_for('main.register') }}" class="w-full block border border-gray-300 text-gray-700 py-3 rounded-md text-center">Registreren</a>
         </div>
     </div>
 
-    <!-- Title -->
-    <h1 class="text-center mb-8 text-xl font-semibold">Leveringsplanning</h1>
+{% else %}
+    <!-- Ingelogd: toon vier tabbladen en bijbehorende content -->
+    <header class="flex items-center gap-4 mb-6">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-black rounded-md flex items-center justify-center text-white">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 13.5V6a1 1 0 011-1h11v8.5m0 0h2.5L21 9.5V14M15 13.5H6m13 4a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"/></svg>
+            </div>
+            <h1 class="text-2xl font-semibold">Delivery Schedule</h1>
+        </div>
+        <nav class="ml-auto flex items-center gap-3">
+            <div id="tabs" class="flex items-center gap-2 bg-[#ecebef] rounded-full p-1">
+                <button data-tab="dashboard" class="tab-pill active">Dashboard</button>
+                <button data-tab="plan" class="tab-pill">Levering plannen</button>
+                <button data-tab="availability" class="tab-pill">Beschikbaarheid</button>
+                <button data-tab="trucks" class="tab-pill">Trucks</button>
+            </div>
+            <form method="POST" action="{{ url_for('main.logout') }}" class="ml-4">
+                <button type="submit" class="text-sm text-gray-600">Uitloggen</button>
+            </form>
+        </nav>
+    </header>
 
-    <!-- Welcome message -->
-    <p class="text-center text-gray-600 mb-8">
-        Welkom bij het leveringsplanning systeem. Log in of registreer om verder te gaan.
-    </p>
+    <main class="grid grid-cols-12 gap-6">
+        <!-- Main content area (9 of 12) -->
+        <section class="col-span-9">
+            <!-- Dashboard panel -->
+            <div id="panel-dashboard" class="panel card-ghost p-6 mb-6">
+                <div class="grid grid-cols-4 gap-4">
+                    <div class="p-4 bg-white rounded shadow-sm border"> 
+                        <h3 class="text-sm text-gray-500">Geplande Leveringen</h3>
+                        <div class="text-3xl font-bold">0</div>
+                        <div class="text-xs text-gray-400">Deze week • Volgende week: 0</div>
+                    </div>
+                    <div class="p-4 bg-white rounded shadow-sm border">
+                        <h3 class="text-sm text-gray-500">Beschikbare Trucks</h3>
+                        <div class="text-3xl font-bold">0</div>
+                        <div class="text-xs text-gray-400">0 onderweg</div>
+                    </div>
+                    <div class="p-4 bg-white rounded shadow-sm border">
+                        <h3 class="text-sm text-gray-500">Beschikbare Chauffeurs</h3>
+                        <div class="text-3xl font-bold">0</div>
+                        <div class="text-xs text-gray-400">Vandaag beschikbaar</div>
+                    </div>
+                    <div class="p-4 bg-white rounded shadow-sm border">
+                        <h3 class="text-sm text-gray-500">Actieve Routes</h3>
+                        <div class="text-3xl font-bold">0</div>
+                        <div class="text-xs text-gray-400">Op dit moment</div>
+                    </div>
+                </div>
 
-    <!-- Action buttons -->
-    <div class="space-y-4">
-        <a href="{{ url_for('main.login') }}" class="w-full bg-black text-white py-3 rounded-md hover:bg-gray-800 flex items-center justify-center">
-            Inloggen
-        </a>
-        
-        <a href="{{ url_for('main.register') }}" class="w-full border border-gray-300 text-gray-700 py-3 rounded-md hover:bg-gray-50 flex items-center justify-center">
-            Registreren
-        </a>
-    </div>
+                <div class="mt-6 bg-white rounded p-4 border h-48">Aankomende Leveringen</div>
+            </div>
 
-</div>
+            <!-- Plan delivery panel -->
+            <div id="panel-plan" class="panel card-ghost p-6 mb-6 hidden">
+                <h2 class="mb-4 font-semibold">Levering plannen</h2>
+                <form method="POST" action="{{ url_for('main.schedule') }}" class="max-w-md">
+                    <label class="block text-sm text-gray-600">Selecteer leveringsdatum</label>
+                    <input type="date" name="scheduled_date" class="w-full border rounded-md p-2 my-2" required>
+                    <label class="block text-sm text-gray-600">Order ID</label>
+                    <input name="order_id" type="number" class="w-full border rounded-md p-2 my-2" placeholder="Voer order ID in" required>
+                    <label class="block text-sm text-gray-600">Regio (optioneel)</label>
+                    <input name="region_id" type="number" class="w-full border rounded-md p-2 my-2" placeholder="Regio ID">
+                    <button class="mt-3 w-full bg-black text-white py-2 rounded">Levering plannen</button>
+                </form>
+            </div>
+
+            <!-- Availability panel -->
+            <div id="panel-availability" class="panel card-ghost p-6 mb-6 hidden">
+                <h2 class="mb-4 font-semibold">Beschikbaarheid chauffeurs</h2>
+                <form method="POST" action="{{ url_for('main.availability') }}" class="max-w-2xl grid grid-cols-3 gap-3 items-end">
+                    <div>
+                        <label class="block text-sm text-gray-600">Datum</label>
+                        <input name="available_date" type="date" class="w-full border rounded-md p-2" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-600">Active</label>
+                        <select name="active" class="w-full border rounded-md p-2">
+                            <option value="true">Beschikbaar</option>
+                            <option value="false">Niet beschikbaar</option>
+                        </select>
+                    </div>
+                    <div>
+                        <button class="w-full bg-black text-white py-2 rounded">+ Beschikbaarheid toevoegen</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Trucks panel -->
+            <div id="panel-trucks" class="panel card-ghost p-6 mb-6 hidden">
+                <h2 class="mb-4 font-semibold">Truck Overzicht</h2>
+                <div class="bg-white rounded p-6 text-center text-gray-500">Geen trucks beschikbaar<br><small class="text-xs">Ga naar "Levering plannen" om trucks toe te voegen</small></div>
+            </div>
+        </section>
+
+        <!-- Right column (3 of 12) -->
+        <aside class="col-span-3">
+            <div class="card-ghost p-4 mb-6">
+                <h3 class="font-semibold">Snelle Acties</h3>
+                <ul class="mt-3 space-y-2 text-sm text-gray-600">
+                    <li><a href="#" class="block p-2 border rounded">Nieuwe Levering Plannen</a></li>
+                    <li><a href="#" class="block p-2 border rounded">Chauffeur Toevoegen</a></li>
+                    <li><a href="#" class="block p-2 border rounded">Truck Beheren</a></li>
+                </ul>
+            </div>
+
+            <div class="card-ghost p-4">
+                <h3 class="font-semibold">Vandaag</h3>
+                <dl class="mt-3 text-sm text-gray-600">
+                    <div class="flex justify-between"><dt>Leveringen</dt><dd>0</dd></div>
+                    <div class="flex justify-between"><dt>Actieve Trucks</dt><dd>0</dd></div>
+                    <div class="flex justify-between"><dt>Beschikbare Chauffeurs</dt><dd>0</dd></div>
+                </dl>
+            </div>
+        </aside>
+    </main>
+
+    <script>
+        // Tab switching
+        document.querySelectorAll('#tabs [data-tab]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('#tabs [data-tab]').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const show = btn.getAttribute('data-tab');
+                document.querySelectorAll('.panel').forEach(p => p.classList.add('hidden'));
+                if (show === 'dashboard') document.getElementById('panel-dashboard').classList.remove('hidden');
+                if (show === 'plan') document.getElementById('panel-plan').classList.remove('hidden');
+                if (show === 'availability') document.getElementById('panel-availability').classList.remove('hidden');
+                if (show === 'trucks') document.getElementById('panel-trucks').classList.remove('hidden');
+            });
+        });
+    </script>
+
+{% endif %}
 
 <!-- Bootstrap -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-
 </body>
 </html>
 
