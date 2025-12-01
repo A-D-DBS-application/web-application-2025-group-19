@@ -366,14 +366,20 @@ def upsert_run_and_attach_delivery_with_capacity(
 
 def get_delivery_overview(tenant_id: int, region_id: int = None, order_date: date = None):
     """Get all deliveries for a tenant with their order/run info (using outer join for safety)."""
+    # Return product_id (from order_item) instead of order_id so the listings
+    # display the actual entered product identifier.
     q = db.session.query(
-        Delivery.delivery_id, CustomerOrder.order_id,
+        Delivery.delivery_id,
+        OrderItem.product_id,
         Region.name,  # Get the region/municipality from DeliveryRun's region, not Customer
         Delivery.delivery_status,
         CustomerOrder.order_date, DeliveryRun.scheduled_date, DeliveryRun.region_id
     ).outerjoin(
         CustomerOrder,
         (Delivery.tenant_id == CustomerOrder.tenant_id) & (Delivery.order_id == CustomerOrder.order_id)
+    ).outerjoin(
+        OrderItem,
+        (CustomerOrder.tenant_id == OrderItem.tenant_id) & (CustomerOrder.order_id == OrderItem.order_id)
     ).outerjoin(
         DeliveryRun,
         (Delivery.tenant_id == DeliveryRun.tenant_id) & (Delivery.run_id == DeliveryRun.run_id)
