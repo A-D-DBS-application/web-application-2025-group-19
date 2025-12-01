@@ -337,7 +337,7 @@ def upsert_run_and_attach_delivery_with_capacity(
         run = DeliveryRun(
             tenant_id=tenant_id, scheduled_date=scheduled_date,
             region_id=region_id, driver_id=driver_id,
-            capacity=10, status=RunStatus.active
+            capacity=10, status=RunStatus.in_progress
         )
         db.session.add(run)
         db.session.flush()  # krijg run_id
