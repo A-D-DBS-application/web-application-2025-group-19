@@ -541,14 +541,19 @@ def schedule():
         )
         flash(f"Levering #{delivery_id} gepland op {scheduled_date}.", "success")
     except ValueError as e:
+        # Known business rule error (capacity etc.)
+        current_app.logger.warning(f"Scheduling validation error: {e}")
         flash(str(e), "error")
     except Exception as e:
+        # Unexpected error: rollback, log full traceback and show helpful message
         db.session.rollback()
         import traceback
-        error_msg = f"Schedule error: {str(e)}\n{traceback.format_exc()}"
+        tb = traceback.format_exc()
+        error_msg = f"Schedule unexpected error: {str(e)}\n{tb}"
         current_app.logger.error(error_msg)
-        print(error_msg)  # Also print to console
-        flash("Onbekende fout bij plannen van levering.", "error")
+        # Provide more context to the user while keeping it readable
+        short_msg = str(e) if str(e) else "Interne serverfout"
+        flash(f"Onbekende fout bij plannen van levering: {short_msg}", "error")
     
     return redirect(url_for("main.index"))
 
