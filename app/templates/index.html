@@ -16,12 +16,8 @@
             <h1 class="text-2xl font-semibold">Delivery Schedule</h1>
         </div>
         <div class="mt-4 flex items-center">
-            <div id="tabs" class="flex items-center gap-2 bg-[#ecebef] rounded-full p-1">
-                <button data-tab="dashboard" class="tab-pill active">Homepage</button>
-                <button data-tab="plan" class="tab-pill">Leveringen</button>
-                <button data-tab="drivers" class="tab-pill">Chauffeurs</button>
-                <button data-tab="trucks" class="tab-pill">Trucks</button>
-            </div>
+            <!-- Top navigation in header replaces the in-page tab pills. -->
+            <!-- Removed duplicate tab pills to avoid redundancy with the main nav. -->
         </div>
     </div>
 
@@ -180,18 +176,25 @@
             });
         }
 
-        document.querySelectorAll('#tabs [data-tab]').forEach(btn => {
-            btn.addEventListener('click', () => {
-                document.querySelectorAll('#tabs [data-tab]').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                const show = btn.getAttribute('data-tab');
-                document.querySelectorAll('.panel').forEach(p => p.classList.add('hidden'));
-                if (show === 'dashboard') document.getElementById('panel-dashboard').classList.remove('hidden');
-                if (show === 'plan') document.getElementById('panel-plan').classList.remove('hidden');
-                if (show === 'drivers') document.getElementById('panel-drivers').classList.remove('hidden');
-                if (show === 'add-driver') document.getElementById('panel-add-driver').classList.remove('hidden');
-                if (show === 'add-truck') document.getElementById('panel-add-truck').classList.remove('hidden');
-            });
+        // Simple panel switcher used by the "Snelle Acties" buttons.
+        function switchTab(tabName) {
+            // hide all panels
+            document.querySelectorAll('.panel').forEach(p => p.classList.add('hidden'));
+            // show requested panel (default to dashboard)
+            if (tabName === 'plan') {
+                document.getElementById('panel-plan').classList.remove('hidden');
+            } else if (tabName === 'drivers') {
+                document.getElementById('panel-drivers').classList.remove('hidden');
+            } else if (tabName === 'trucks') {
+                document.getElementById('panel-trucks').classList.remove('hidden');
+            } else {
+                document.getElementById('panel-dashboard').classList.remove('hidden');
+            }
+        }
+
+        // Ensure dashboard is visible on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            switchTab('dashboard');
         });
     </script>
 {% endblock %}
