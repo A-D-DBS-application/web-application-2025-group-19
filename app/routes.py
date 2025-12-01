@@ -539,7 +539,12 @@ def schedule():
         delivery_id = upsert_run_and_attach_delivery_with_capacity(
             tid, order_id, region_id, driver_id, scheduled_date
         )
-        flash(f"Levering #{delivery_id} gepland op {scheduled_date}.", "success")
+        # Format date for user-facing message (dd-mm-YYYY)
+        try:
+            sched_str = scheduled_date.strftime('%d-%m-%Y')
+        except Exception:
+            sched_str = str(scheduled_date)
+        flash(f"Levering #{delivery_id} gepland op {sched_str}.", "success")
     except ValueError as e:
         # Known business rule error (capacity etc.)
         current_app.logger.warning(f"Scheduling validation error: {e}")
