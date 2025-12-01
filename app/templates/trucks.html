@@ -3,8 +3,18 @@
 {% block content %}
 <div class="container mx-auto p-6">
   <div class="flex items-center justify-between mb-6">
-    <h1 class="text-3xl font-semibold">Beschikbare Trucks</h1>
-    <a href="{{ url_for('main.index') }}" class="bg-gray-800 text-white px-4 py-2 rounded hover:bg-gray-700">← Terug naar Dashboard</a>
+    <h1 class="text-3xl font-semibold">Trucks</h1>
+    <a href="{{ url_for('main.index') }}" class="bg-gray-800 text-white px-4 py-2 rounded hover:bg-gray-700">Homepage</a>
+  </div>
+  <div class="mb-6 card-ghost p-4">
+    <h2 class="text-lg font-semibold mb-3">Truck toevoegen</h2>
+    <form method="POST" action="{{ url_for('main.add_truck') }}" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <input type="date" name="scheduled_date" class="border rounded p-2" required>
+      <input type="number" name="capacity" class="border rounded p-2" min="1" placeholder="Capaciteit" required>
+      <div class="sm:col-span-2">
+        <button type="submit" class="w-full bg-black text-white py-2 rounded hover:bg-gray-800">Truck toevoegen</button>
+      </div>
+    </form>
   </div>
 
   {% if trucks %}
