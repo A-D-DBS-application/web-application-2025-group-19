@@ -1,1 +1,21 @@
 venv/
+
+# Local environment files with sensitive credentials
+.env
+.env.local
+.env.*.local
+
+# Database files
+*.db
+dev.db
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
