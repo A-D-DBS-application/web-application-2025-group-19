@@ -19,7 +19,9 @@ USE_SQLITE = os.getenv("USE_SQLITE", "0") == "1"
 
 # Build database URI at module load time (reads env vars fresh)
 if USE_SQLITE:
-    DATABASE_URI = "sqlite:///dev.db"
+    # Use absolute path for SQLite on Windows
+    db_path = Path(__file__).parent.parent / "dev.db"
+    DATABASE_URI = f"sqlite:///{db_path}"
 else:
     SUPABASE_USER = os.getenv("SUPABASE_USER", "postgres")
     SUPABASE_PASSWORD = os.getenv("SUPABASE_PASSWORD", "hzSgnWByUopBVKG8")

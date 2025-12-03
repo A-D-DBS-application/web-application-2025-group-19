@@ -271,12 +271,15 @@ def register():
         flash("E-mailadres bestaat al.", "error")
         return redirect(url_for("main.register"))
 
+    from .models import get_next_employee_id
+    next_emp_id = get_next_employee_id(tid)
+    
     emp = Employee(
-        tenant_id=tid, first_name=first, last_name=last,
+        tenant_id=tid, employee_id=next_emp_id, first_name=first, last_name=last,
         email=email, role=EmployeeRole.seller, active=True
     )
     db.session.add(emp)
-    db.session.flush()  # <<< belangrijk: krijg employee_id rechtstreeks
+    db.session.flush()  # krijg id (auto-increment)
     session["employee_id"] = emp.employee_id
     session["username"] = f"{emp.first_name}.{emp.last_name}".lower()
     db.session.commit()
@@ -423,12 +426,13 @@ def add_driver():
         return redirect(url_for("main.index"))
 
     try:
+        next_emp_id = get_next_employee_id(tid)
         emp = Employee(
-            tenant_id=tid, first_name=first, last_name=last, email=email,
+            tenant_id=tid, employee_id=next_emp_id, first_name=first, last_name=last, email=email,
             role=EmployeeRole.driver, active=True
         )
         db.session.add(emp)
-        db.session.flush()  # Get the employee_id before commit
+        db.session.flush()  # Get the id before commit
         
         # Set availability based on user input or use today as default
         if availability_date_str:
