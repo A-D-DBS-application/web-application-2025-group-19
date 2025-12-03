@@ -5,7 +5,12 @@
     <div class="max-w-md mx-auto bg-white rounded-lg shadow p-8">
         <div class="flex justify-center mb-4">
             <div class="w-14 h-14 bg-black rounded-2xl flex items-center justify-center text-white">
-                <svg class="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 17V7a2 2 0 012-2h11a2 2 0 012 2v10m-2 0h3m-3 0a3 3 0 11-6 0m6 0H9m0 0a3 3 0 11-6 0m6 0H5"/></svg>
+                
+                <!-- Vrachtwagen icoon zoals jouw voorbeeld -->
+                <svg class="w-7 h-7" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M3 5a2 2 0 012-2h8a2 2 0 012 2v6h1.5a2 2 0 011.6.8l2.4 3.2c.3.4.5.9.5 1.4V19a2 2 0 01-2 2h-1a2 2 0 11-4 0H9a2 2 0 11-4 0H5a2 2 0 01-2-2V5zm14 10h3l-2-2.7a1 1 0 00-.8-.4H17v3z"/>
+                </svg>
+
             </div>
         </div>
         <h1 class="text-center mb-4 text-xl font-semibold">Leveringsplanning – Inloggen</h1>
@@ -20,8 +25,10 @@
                 <input name="password" type="password" class="w-full border rounded-md px-3 py-2" required>
             </div>
             <button class="w-full bg-black text-white py-2 rounded">Inloggen</button>
-            <p class="text-center text-sm mt-3">Nog geen account? <a href="{{ url_for('main.register') }}" class="text-blue-600">Registreren</a></p>
+
+            <p class="text-center text-sm mt-3">Nog geen account?
+                <a href="{{ url_for('main.register') }}" class="text-blue-600">Registreren</a>
+            </p>
         </form>
     </div>
 {% endblock %}
-

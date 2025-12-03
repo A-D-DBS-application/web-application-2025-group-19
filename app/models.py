@@ -2,12 +2,26 @@
 # app/models.py
 from datetime import datetime, date
 import enum
+import os
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import (
     ForeignKeyConstraint, UniqueConstraint, CheckConstraint, Index, Identity
 )
 
 db = SQLAlchemy()
+
+# --- Helper for SQLite vs PostgreSQL compatibility ---
+# SQLite doesn't support Identity(), so use autoincrement for SQLite
+USE_SQLITE = os.getenv("USE_SQLITE", "0") == "1"
+
+def pk_id_column(autoincrement=True):
+    """Return a primary key column that works with both SQLite and PostgreSQL."""
+    if USE_SQLITE:
+        # SQLite: use autoincrement
+        return db.Column(db.Integer, primary_key=True, autoincrement=autoincrement)
+    else:
+        # PostgreSQL: use Identity(always=True)
+        return db.Column(db.Integer, Identity(always=True), primary_key=True)
 
 # --- Enums ---
 class EmployeeRole(enum.Enum):
@@ -36,7 +50,7 @@ class DeliveryStatus(enum.Enum):
 # --- tenant ---
 class Tenant(db.Model):
     __tablename__ = "tenant"
-    tenant_id    = db.Column(db.Integer, Identity(always=True), primary_key=True)
+    tenant_id    = pk_id_column()
     name         = db.Column(db.String(150), unique=True, nullable=False)
     industry     = db.Column(db.String(100), default="retail")
     contact_email= db.Column(db.String(150))
@@ -46,7 +60,7 @@ class Tenant(db.Model):
 class Region(db.Model):
     __tablename__ = "region"
     tenant_id = db.Column(db.Integer, primary_key=True)
-    region_id = db.Column(db.Integer, Identity(always=True), primary_key=True)
+    region_id = pk_id_column()
     name      = db.Column(db.String(100), nullable=False)
     __table_args__ = (
         ForeignKeyConstraint(["tenant_id"], ["tenant.tenant_id"], ondelete="CASCADE"),
@@ -58,7 +72,7 @@ class Region(db.Model):
 class Location(db.Model):
     __tablename__ = "location"
     tenant_id   = db.Column(db.Integer, primary_key=True)
-    location_id = db.Column(db.Integer, Identity(always=True), primary_key=True)
+    location_id = pk_id_column()
     name        = db.Column(db.String(100), nullable=False)
     address     = db.Column(db.String(200))
     region_id   = db.Column(db.Integer)
@@ -75,7 +89,7 @@ class Location(db.Model):
 class Employee(db.Model):
     __tablename__ = "employee"
     tenant_id   = db.Column(db.Integer, primary_key=True)
-    employee_id = db.Column(db.Integer, Identity(always=True), primary_key=True)
+    employee_id = pk_id_column()
     location_id = db.Column(db.Integer)
     first_name  = db.Column(db.String(100), nullable=False)
     last_name   = db.Column(db.String(100), nullable=False)
@@ -100,7 +114,7 @@ class Employee(db.Model):
 class Availability(db.Model):
     __tablename__ = "availability"
     tenant_id       = db.Column(db.Integer, primary_key=True)
-    availability_id = db.Column(db.Integer, Identity(always=True), primary_key=True)
+    availability_id = pk_id_column()
     employee_id     = db.Column(db.Integer, nullable=False)
     available_date  = db.Column(db.Date, nullable=False)
     active          = db.Column(db.Boolean, default=True)
@@ -117,7 +131,7 @@ class Availability(db.Model):
 class Customer(db.Model):
     __tablename__ = "customer"
     tenant_id   = db.Column(db.Integer, primary_key=True)
-    customer_id = db.Column(db.Integer, Identity(always=True), primary_key=True)
+    customer_id = pk_id_column()
     name        = db.Column(db.String(150), nullable=False)
     municipality= db.Column(db.String(100))
     region_id   = db.Column(db.Integer)
@@ -136,7 +150,7 @@ class Customer(db.Model):
 class Product(db.Model):
     __tablename__ = "product"
     tenant_id  = db.Column(db.Integer, primary_key=True)
-    product_id = db.Column(db.Integer, Identity(always=True), primary_key=True)
+    product_id = pk_id_column()
     name       = db.Column(db.String(150), nullable=False)
     category   = db.Column(db.String(100))
     stock_qty  = db.Column(db.Integer, default=0)
@@ -149,7 +163,7 @@ class Product(db.Model):
 class CustomerOrder(db.Model):
     __tablename__ = "customer_order"
     tenant_id  = db.Column(db.Integer, primary_key=True)
-    order_id   = db.Column(db.Integer, Identity(always=True), primary_key=True)
+    order_id   = pk_id_column()
     customer_id= db.Column(db.Integer)
     location_id= db.Column(db.Integer)
     seller_id  = db.Column(db.Integer)
@@ -174,7 +188,7 @@ class CustomerOrder(db.Model):
 class OrderItem(db.Model):
     __tablename__ = "order_item"
     tenant_id      = db.Column(db.Integer, primary_key=True)
-    order_item_id  = db.Column(db.Integer, Identity(always=True), primary_key=True)
+    order_item_id  = pk_id_column()
     order_id       = db.Column(db.Integer, nullable=False)
     product_id     = db.Column(db.Integer, nullable=False)
     quantity       = db.Column(db.Integer, default=1)
@@ -192,7 +206,7 @@ class OrderItem(db.Model):
 class DeliveryRun(db.Model):
     __tablename__ = "delivery_run"
     tenant_id       = db.Column(db.Integer, primary_key=True)
-    run_id          = db.Column(db.Integer, Identity(always=True), primary_key=True)
+    run_id          = pk_id_column()
     scheduled_date  = db.Column(db.Date, nullable=False)
     region_id       = db.Column(db.Integer)
     driver_id       = db.Column(db.Integer)
@@ -214,7 +228,7 @@ class DeliveryRun(db.Model):
 class Delivery(db.Model):
     __tablename__ = "delivery"
     tenant_id      = db.Column(db.Integer, primary_key=True)
-    delivery_id    = db.Column(db.Integer, Identity(always=True), primary_key=True)
+    delivery_id    = pk_id_column()
     order_id       = db.Column(db.Integer)
     run_id         = db.Column(db.Integer)
     delivery_status= db.Column(db.Enum(DeliveryStatus, name="delivery_status", native_enum=True),
