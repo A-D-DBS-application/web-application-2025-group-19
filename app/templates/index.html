@@ -11,13 +11,11 @@
     <div class="mb-6">
         <div class="flex items-center gap-3">
             <div class="w-10 h-10 bg-black rounded-md flex items-center justify-center text-white">
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 13.5V6a1 1 0 011-1h11v8.5m0 0h2.5L21 9.5V14M15 13.5H6m13 4a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"/></svg>
+                <img src="{{ url_for('static', filename='icons/truck.png') }}" class="w-5 h-5" />
             </div>
             <h1 class="text-2xl font-semibold">Delivery Schedule</h1>
         </div>
         <div class="mt-4 flex items-center">
-            <!-- Top navigation in header replaces the in-page tab pills. -->
-            <!-- Removed duplicate tab pills to avoid redundancy with the main nav. -->
         </div>
     </div>
 
@@ -105,6 +103,7 @@
                     <button type="submit" class="mt-3 w-full bg-black text-white py-2 rounded hover:bg-gray-800">Levering plannen</button>
                 </form>
             </div>
+
             <div id="panel-drivers" class="panel card-ghost p-6 mb-6 hidden">
                 <div class="flex items-center justify-between mb-4">
                     <h2 class="font-semibold">Beschikbare Chauffeurs</h2>
@@ -141,8 +140,6 @@
                 </div>
                 <p class="text-gray-600">Klik op "Trucks" in de navigatie om trucks toe te voegen of te beheren.</p>
             </div>
-
-
         </section>
 
         <aside class="col-span-3">
@@ -168,19 +165,8 @@
 
     <script>
         function switchTab(tabName) {
-            // Find and click the corresponding tab button
-            document.querySelectorAll('#tabs [data-tab]').forEach(btn => {
-                if (btn.getAttribute('data-tab') === tabName) {
-                    btn.click();
-                }
-            });
-        }
-
-        // Simple panel switcher used by the "Snelle Acties" buttons.
-        function switchTab(tabName) {
-            // hide all panels
             document.querySelectorAll('.panel').forEach(p => p.classList.add('hidden'));
-            // show requested panel (default to dashboard)
+
             if (tabName === 'plan') {
                 document.getElementById('panel-plan').classList.remove('hidden');
             } else if (tabName === 'drivers') {
@@ -192,20 +178,8 @@
             }
         }
 
-        // Ensure dashboard is visible on page load
         document.addEventListener('DOMContentLoaded', function() {
             switchTab('dashboard');
         });
     </script>
 {% endblock %}
-
-
-
-
-
-
-
-
-
-
-
