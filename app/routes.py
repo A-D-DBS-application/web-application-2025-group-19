@@ -522,17 +522,19 @@ def schedule():
                 customer = Customer(tenant_id=tid, name="Demo Customer", municipality="DemoTown", email="demo@customer.local")
                 db.session.add(customer); db.session.flush()
 
-            # Use address from form if provided, otherwise use default
+            # Use address from form if provided for the initial demo location, otherwise use default.
+            # IMPORTANT: Do NOT mutate this location after creation, otherwise older demo orders
+            # would appear to move to the latest region/address.
             location_address = address if address else "Demo Street 1"
             loc = Location.query.filter_by(tenant_id=tid, name="Demo Store").first()
             if not loc:
-                loc = Location(tenant_id=tid, name="Demo Store", address=location_address, region_id=region_id)
-                db.session.add(loc); db.session.flush()
-            elif address:
-                # Update address if provided
-                loc.address = address
-                if region_id:
-                    loc.region_id = region_id
+                loc = Location(
+                    tenant_id=tid,
+                    name="Demo Store",
+                    address=location_address,
+                    region_id=region_id,
+                )
+                db.session.add(loc)
                 db.session.flush()
 
             # create a new order for this demo product
