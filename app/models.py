@@ -3,6 +3,7 @@
 from datetime import datetime, date
 import enum
 import os
+from pathlib import Path
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import (
     ForeignKeyConstraint, UniqueConstraint, CheckConstraint, Index, Identity
@@ -11,14 +12,41 @@ from sqlalchemy import (
 db = SQLAlchemy()
 
 # --- Helper for SQLite vs PostgreSQL compatibility ---
-# SQLite doesn't support Identity(), so use autoincrement for SQLite
-USE_SQLITE = os.getenv("USE_SQLITE", "0") == "1"
+# Check if we're using SQLite by reading .env.local or env var
+def _is_using_sqlite():
+    """Determine if using SQLite based on env var or .env.local file."""
+    # First check env var
+    if os.getenv("USE_SQLITE", "").lower() == "1":
+        return True
+    
+    # Then check .env.local file
+    env_local = Path(__file__).parent.parent / ".env.local"
+    if env_local.exists():
+        with open(env_local) as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("USE_SQLITE="):
+                    return line.split("=", 1)[1].strip() == "1"
+    
+    return False
 
-def pk_id_column(autoincrement=True):
-    """Return a primary key column that works with both SQLite and PostgreSQL."""
+USE_SQLITE = _is_using_sqlite()
+
+def pk_id_column(autoincrement=True, is_composite_key_part=False):
+    """
+    Return a primary key column that works with both SQLite and PostgreSQL.
+    
+    Args:
+        autoincrement: Whether to enable autoincrement (only applies to single PKs or first column in composite)
+        is_composite_key_part: If True, indicates this is part of a composite key. For SQLite,
+                               this disables autoincrement (SQLite only supports autoincrement on single or first PK column).
+    """
     if USE_SQLITE:
-        # SQLite: use autoincrement
-        return db.Column(db.Integer, primary_key=True, autoincrement=autoincrement)
+        # SQLite: Don't use autoincrement on non-first columns of composite keys
+        if is_composite_key_part:
+            return db.Column(db.Integer, primary_key=True, autoincrement=False)
+        else:
+            return db.Column(db.Integer, primary_key=True, autoincrement=autoincrement)
     else:
         # PostgreSQL: use Identity(always=True)
         return db.Column(db.Integer, Identity(always=True), primary_key=True)
@@ -60,7 +88,7 @@ class Tenant(db.Model):
 class Region(db.Model):
     __tablename__ = "region"
     tenant_id = db.Column(db.Integer, primary_key=True)
-    region_id = pk_id_column()
+    region_id = pk_id_column(is_composite_key_part=True)
     name      = db.Column(db.String(100), nullable=False)
     __table_args__ = (
         ForeignKeyConstraint(["tenant_id"], ["tenant.tenant_id"], ondelete="CASCADE"),
@@ -72,7 +100,7 @@ class Region(db.Model):
 class Location(db.Model):
     __tablename__ = "location"
     tenant_id   = db.Column(db.Integer, primary_key=True)
-    location_id = pk_id_column()
+    location_id = pk_id_column(is_composite_key_part=True)
     name        = db.Column(db.String(100), nullable=False)
     address     = db.Column(db.String(200))
     region_id   = db.Column(db.Integer)
@@ -85,11 +113,12 @@ class Location(db.Model):
         Index("idx_location_tenant_region", "tenant_id", "region_id"),
     )
 
-# --- employee (PK: tenant_id, employee_id) ---
+# --- employee (PK: id; unique on tenant_id+email) ---
 class Employee(db.Model):
     __tablename__ = "employee"
-    tenant_id   = db.Column(db.Integer, primary_key=True)
-    employee_id = pk_id_column()
+    id          = db.Column(db.Integer, primary_key=True, autoincrement=True)  # Single PK for autoincrement
+    tenant_id   = db.Column(db.Integer, nullable=False)
+    employee_id = db.Column(db.Integer, nullable=False)  # Composite key part (no longer PK)
     location_id = db.Column(db.Integer)
     first_name  = db.Column(db.String(100), nullable=False)
     last_name   = db.Column(db.String(100), nullable=False)
@@ -102,6 +131,7 @@ class Employee(db.Model):
         ForeignKeyConstraint(["tenant_id", "location_id"],
                              ["location.tenant_id", "location.location_id"],
                              ondelete="SET NULL"),
+        UniqueConstraint("tenant_id", "employee_id", name="uq_employee_tenant_id"),
         UniqueConstraint("tenant_id", "email", name="uq_employee_tenant_email"),
         Index("idx_employee_tenant_location", "tenant_id", "location_id"),
     )
@@ -114,7 +144,7 @@ class Employee(db.Model):
 class Availability(db.Model):
     __tablename__ = "availability"
     tenant_id       = db.Column(db.Integer, primary_key=True)
-    availability_id = pk_id_column()
+    availability_id = pk_id_column(is_composite_key_part=True)
     employee_id     = db.Column(db.Integer, nullable=False)
     available_date  = db.Column(db.Date, nullable=False)
     active          = db.Column(db.Boolean, default=True)
@@ -131,7 +161,7 @@ class Availability(db.Model):
 class Customer(db.Model):
     __tablename__ = "customer"
     tenant_id   = db.Column(db.Integer, primary_key=True)
-    customer_id = pk_id_column()
+    customer_id = pk_id_column(is_composite_key_part=True)
     name        = db.Column(db.String(150), nullable=False)
     municipality= db.Column(db.String(100))
     region_id   = db.Column(db.Integer)
@@ -150,7 +180,7 @@ class Customer(db.Model):
 class Product(db.Model):
     __tablename__ = "product"
     tenant_id  = db.Column(db.Integer, primary_key=True)
-    product_id = pk_id_column()
+    product_id = pk_id_column(is_composite_key_part=True)
     name       = db.Column(db.String(150), nullable=False)
     category   = db.Column(db.String(100))
     stock_qty  = db.Column(db.Integer, default=0)
@@ -163,7 +193,7 @@ class Product(db.Model):
 class CustomerOrder(db.Model):
     __tablename__ = "customer_order"
     tenant_id  = db.Column(db.Integer, primary_key=True)
-    order_id   = pk_id_column()
+    order_id   = pk_id_column(is_composite_key_part=True)
     customer_id= db.Column(db.Integer)
     location_id= db.Column(db.Integer)
     seller_id  = db.Column(db.Integer)
@@ -187,8 +217,8 @@ class CustomerOrder(db.Model):
 # --- order_item (PK: tenant_id, order_item_id) ---
 class OrderItem(db.Model):
     __tablename__ = "order_item"
-    tenant_id      = db.Column(db.Integer, primary_key=True)
-    order_item_id  = pk_id_column()
+    tenant_id    = db.Column(db.Integer, primary_key=True)
+    order_item_id  = pk_id_column(is_composite_key_part=True)
     order_id       = db.Column(db.Integer, nullable=False)
     product_id     = db.Column(db.Integer, nullable=False)
     quantity       = db.Column(db.Integer, default=1)
@@ -205,8 +235,8 @@ class OrderItem(db.Model):
 # --- delivery_run (PK: tenant_id, run_id) ---
 class DeliveryRun(db.Model):
     __tablename__ = "delivery_run"
-    tenant_id       = db.Column(db.Integer, primary_key=True)
-    run_id          = pk_id_column()
+    tenant_id   = db.Column(db.Integer, primary_key=True)
+    run_id          = pk_id_column(is_composite_key_part=True)
     scheduled_date  = db.Column(db.Date, nullable=False)
     region_id       = db.Column(db.Integer)
     driver_id       = db.Column(db.Integer)
@@ -227,8 +257,8 @@ class DeliveryRun(db.Model):
 # --- delivery (PK: tenant_id, delivery_id) ---
 class Delivery(db.Model):
     __tablename__ = "delivery"
-    tenant_id      = db.Column(db.Integer, primary_key=True)
-    delivery_id    = pk_id_column()
+    tenant_id   = db.Column(db.Integer, primary_key=True)
+    delivery_id    = pk_id_column(is_composite_key_part=True)
     order_id       = db.Column(db.Integer)
     run_id         = db.Column(db.Integer)
     delivery_status= db.Column(db.Enum(DeliveryStatus, name="delivery_status", native_enum=True),
@@ -269,6 +299,76 @@ def set_employee_availability(tenant_id: int, employee_id: int, available_date: 
         )
         db.session.add(av)
     db.session.commit()
+
+def get_next_employee_id(tenant_id: int) -> int:
+    """Get the next available employee_id for a tenant (auto-increment per tenant)."""
+    max_id = db.session.query(db.func.max(Employee.employee_id)).filter(
+        Employee.tenant_id == tenant_id
+    ).scalar()
+    return (max_id or 0) + 1
+
+def get_next_region_id(tenant_id: int) -> int:
+    """Get the next available region_id for a tenant."""
+    max_id = db.session.query(db.func.max(Region.region_id)).filter(
+        Region.tenant_id == tenant_id
+    ).scalar()
+    return (max_id or 0) + 1
+
+def get_next_location_id(tenant_id: int) -> int:
+    """Get the next available location_id for a tenant."""
+    max_id = db.session.query(db.func.max(Location.location_id)).filter(
+        Location.tenant_id == tenant_id
+    ).scalar()
+    return (max_id or 0) + 1
+
+def get_next_customer_id(tenant_id: int) -> int:
+    """Get the next available customer_id for a tenant."""
+    max_id = db.session.query(db.func.max(Customer.customer_id)).filter(
+        Customer.tenant_id == tenant_id
+    ).scalar()
+    return (max_id or 0) + 1
+
+def get_next_product_id(tenant_id: int) -> int:
+    """Get the next available product_id for a tenant."""
+    max_id = db.session.query(db.func.max(Product.product_id)).filter(
+        Product.tenant_id == tenant_id
+    ).scalar()
+    return (max_id or 0) + 1
+
+def get_next_order_id(tenant_id: int) -> int:
+    """Get the next available order_id for a tenant."""
+    max_id = db.session.query(db.func.max(CustomerOrder.order_id)).filter(
+        CustomerOrder.tenant_id == tenant_id
+    ).scalar()
+    return (max_id or 0) + 1
+
+def get_next_order_item_id(tenant_id: int) -> int:
+    """Get the next available order_item_id for a tenant."""
+    max_id = db.session.query(db.func.max(OrderItem.order_item_id)).filter(
+        OrderItem.tenant_id == tenant_id
+    ).scalar()
+    return (max_id or 0) + 1
+
+def get_next_availability_id(tenant_id: int) -> int:
+    """Get the next available availability_id for a tenant."""
+    max_id = db.session.query(db.func.max(Availability.availability_id)).filter(
+        Availability.tenant_id == tenant_id
+    ).scalar()
+    return (max_id or 0) + 1
+
+def get_next_run_id(tenant_id: int) -> int:
+    """Get the next available run_id for a tenant."""
+    max_id = db.session.query(db.func.max(DeliveryRun.run_id)).filter(
+        DeliveryRun.tenant_id == tenant_id
+    ).scalar()
+    return (max_id or 0) + 1
+
+def get_next_delivery_id(tenant_id: int) -> int:
+    """Get the next available delivery_id for a tenant."""
+    max_id = db.session.query(db.func.max(Delivery.delivery_id)).filter(
+        Delivery.tenant_id == tenant_id
+    ).scalar()
+    return (max_id or 0) + 1
 
 def get_available_drivers(tenant_id: int, region_id: int, on_date: date):
     q = db.session.query(Employee).join(
