@@ -478,6 +478,7 @@ def schedule():
 
     tid = tenant_id()
     order_id = request.form.get("order_id")
+    address = request.form.get("address")
     region_name = request.form.get("region_id")  # Now it's a municipality name
     scheduled_date_str = request.form.get("scheduled_date")
 
@@ -521,10 +522,18 @@ def schedule():
                 customer = Customer(tenant_id=tid, name="Demo Customer", municipality="DemoTown", email="demo@customer.local")
                 db.session.add(customer); db.session.flush()
 
+            # Use address from form if provided, otherwise use default
+            location_address = address if address else "Demo Street 1"
             loc = Location.query.filter_by(tenant_id=tid, name="Demo Store").first()
             if not loc:
-                loc = Location(tenant_id=tid, name="Demo Store", address="Demo Street 1", region_id=None)
+                loc = Location(tenant_id=tid, name="Demo Store", address=location_address, region_id=region_id)
                 db.session.add(loc); db.session.flush()
+            elif address:
+                # Update address if provided
+                loc.address = address
+                if region_id:
+                    loc.region_id = region_id
+                db.session.flush()
 
             # create a new order for this demo product
             new_order_id = add_order(tenant_id=tid, customer_id=customer.customer_id, location_id=loc.location_id, seller_id=session["employee_id"], product_name=f"Imported {order_id}")
@@ -561,6 +570,150 @@ def schedule():
         flash(f"Onbekende fout bij plannen van levering: {short_msg}", "error")
     
     return redirect(url_for("main.index"))
+
+
+# --- API endpoints voor beschikbaarheid en suggesties ---
+@main.route("/api/availability/<date_str>", methods=["GET"])
+def get_availability(date_str):
+    """Get driver and truck availability for a specific date."""
+    if "employee_id" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    
+    try:
+        selected_date = date.fromisoformat(date_str)
+    except Exception:
+        return jsonify({"error": "Invalid date format"}), 400
+    
+    tid = tenant_id()
+    
+    # Get available drivers for this date
+    drivers = db.session.query(
+        Employee.employee_id,
+        Employee.first_name,
+        Employee.last_name,
+        Location.address,
+        Region.name.label('region_name')
+    ).join(
+        Availability,
+        (Employee.tenant_id == Availability.tenant_id) & 
+        (Employee.employee_id == Availability.employee_id)
+    ).outerjoin(
+        Location,
+        (Employee.tenant_id == Location.tenant_id) & 
+        (Employee.location_id == Location.location_id)
+    ).outerjoin(
+        Region,
+        (Location.tenant_id == Region.tenant_id) & 
+        (Location.region_id == Region.region_id)
+    ).filter(
+        Employee.tenant_id == tid,
+        Employee.role == EmployeeRole.driver,
+        Employee.active.is_(True),
+        Availability.available_date == selected_date,
+        Availability.active.is_(True)
+    ).all()
+    
+    driver_list = [
+        {
+            "id": d.employee_id,
+            "name": f"{d.first_name} {d.last_name}",
+            "region": d.region_name or "Niet ingesteld"
+        }
+        for d in drivers
+    ]
+    
+    # Get available trucks (planned runs) for this date
+    trucks = db.session.query(
+        DeliveryRun.run_id,
+        DeliveryRun.capacity,
+        Region.name.label('region_name'),
+        Employee.first_name,
+        Employee.last_name
+    ).outerjoin(
+        Region,
+        (DeliveryRun.tenant_id == Region.tenant_id) & 
+        (DeliveryRun.region_id == Region.region_id)
+    ).outerjoin(
+        Employee,
+        (DeliveryRun.tenant_id == Employee.tenant_id) & 
+        (DeliveryRun.driver_id == Employee.employee_id)
+    ).filter(
+        DeliveryRun.tenant_id == tid,
+        DeliveryRun.scheduled_date == selected_date,
+        DeliveryRun.status == RunStatus.planned
+    ).all()
+    
+    # Count deliveries per truck
+    truck_list = []
+    for truck in trucks:
+        delivery_count = db.session.query(db.func.count(Delivery.delivery_id)).filter(
+            Delivery.tenant_id == tid,
+            Delivery.run_id == truck.run_id
+        ).scalar() or 0
+        
+        driver_name = None
+        if truck.first_name and truck.last_name:
+            driver_name = f"{truck.first_name} {truck.last_name}"
+        
+        truck_list.append({
+            "id": truck.run_id,
+            "region": truck.region_name or "Niet ingesteld",
+            "capacity": truck.capacity or 10,
+            "used": delivery_count,
+            "driver": driver_name or "Niet toegewezen"
+        })
+    
+    return jsonify({
+        "date": date_str,
+        "drivers": driver_list,
+        "trucks": truck_list
+    })
+
+
+@main.route("/api/suggest-dates", methods=["GET"])
+def suggest_dates():
+    """Suggest dates with deliveries in the same region."""
+    if "employee_id" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    
+    region_name = request.args.get("region")
+    if not region_name:
+        return jsonify({"suggestions": []})
+    
+    tid = tenant_id()
+    
+    # Find region by name
+    region = Region.query.filter_by(tenant_id=tid, name=region_name).first()
+    if not region:
+        return jsonify({"suggestions": []})
+    
+    # Get dates with deliveries in this region (next 30 days)
+    today = date.today()
+    future_date = today + timedelta(days=30)
+    
+    runs = db.session.query(
+        DeliveryRun.scheduled_date,
+        db.func.count(Delivery.delivery_id).label('delivery_count')
+    ).outerjoin(
+        Delivery,
+        (DeliveryRun.tenant_id == Delivery.tenant_id) & 
+        (DeliveryRun.run_id == Delivery.run_id)
+    ).filter(
+        DeliveryRun.tenant_id == tid,
+        DeliveryRun.region_id == region.region_id,
+        DeliveryRun.scheduled_date >= today,
+        DeliveryRun.scheduled_date <= future_date
+    ).group_by(DeliveryRun.scheduled_date).order_by(DeliveryRun.scheduled_date.asc()).all()
+    
+    suggestions = [
+        {
+            "date": str(run.scheduled_date),
+            "delivery_count": run.delivery_count
+        }
+        for run in runs
+    ]
+    
+    return jsonify({"suggestions": suggestions})
 
 
 # --- Truck Management ---

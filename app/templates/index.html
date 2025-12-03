@@ -86,10 +86,16 @@
 
             <div id="panel-plan" class="panel card-ghost p-6 mb-6 hidden">
                 <h2 class="mb-4 font-semibold">Levering plannen</h2>
-                <form method="POST" action="{{ url_for('main.schedule') }}" class="max-w-md">
+                <form method="POST" action="{{ url_for('main.schedule') }}" class="max-w-md" id="delivery-form">
+                    <div class="mb-4">
+                        <label class="block text-sm text-gray-600 mb-1">Adres *</label>
+                        <input type="text" name="address" id="delivery-address" placeholder="Voer adres in" class="w-full border rounded-md p-2" required>
+                    </div>
+                    
                     <div class="mb-4">
                         <label class="block text-sm text-gray-600 mb-1">Selecteer leveringsdatum *</label>
-                        <input type="date" name="scheduled_date" class="w-full border rounded-md p-2" required>
+                        <input type="date" name="scheduled_date" id="scheduled-date" class="w-full border rounded-md p-2" required>
+                        <div id="date-suggestions" class="mt-2 text-sm text-blue-600"></div>
                     </div>
                     
                     <div class="mb-4">
@@ -99,11 +105,21 @@
                     
                     <div class="mb-4">
                         <label class="block text-sm text-gray-600 mb-1">Gemeente (optioneel)</label>
-                        <input type="text" name="region_id" placeholder="Bijv. Brussel, Antwerpen..." class="w-full border rounded-md p-2">
+                        <input type="text" name="region_id" id="region-input" placeholder="Bijv. Brussel, Antwerpen..." class="w-full border rounded-md p-2">
                     </div>
                     
                     <button type="submit" class="mt-3 w-full bg-black text-white py-2 rounded hover:bg-gray-800">Levering plannen</button>
                 </form>
+                
+                <!-- Calendar voor beschikbaarheid -->
+                <div class="mt-6">
+                    <h3 class="mb-4 font-semibold">Beschikbaarheid Kalender</h3>
+                    <div id="availability-calendar" class="border rounded-md p-4 bg-gray-50">
+                        <div class="text-sm text-gray-600 mb-4">Selecteer een datum om beschikbaarheid te zien</div>
+                        <div id="calendar-container"></div>
+                        <div id="availability-details" class="mt-4"></div>
+                    </div>
+                </div>
             </div>
             <div id="panel-drivers" class="panel card-ghost p-6 mb-6 hidden">
                 <div class="flex items-center justify-between mb-4">
@@ -167,15 +183,6 @@
     </div>
 
     <script>
-        function switchTab(tabName) {
-            // Find and click the corresponding tab button
-            document.querySelectorAll('#tabs [data-tab]').forEach(btn => {
-                if (btn.getAttribute('data-tab') === tabName) {
-                    btn.click();
-                }
-            });
-        }
-
         // Simple panel switcher used by the "Snelle Acties" buttons.
         function switchTab(tabName) {
             // hide all panels
@@ -195,7 +202,213 @@
         // Ensure dashboard is visible on page load
         document.addEventListener('DOMContentLoaded', function() {
             switchTab('dashboard');
+            
+            // Initialize calendar and availability features
+            initAvailabilityCalendar();
+            initDateSuggestions();
         });
+
+        // Initialize availability calendar
+        function initAvailabilityCalendar() {
+            const dateInput = document.getElementById('scheduled-date');
+            const availabilityDetails = document.getElementById('availability-details');
+            const calendarContainer = document.getElementById('calendar-container');
+            
+            if (!dateInput || !availabilityDetails) return;
+            
+            // Create simple calendar view (next 30 days)
+            const calendarHTML = generateCalendarHTML();
+            if (calendarContainer) {
+                calendarContainer.innerHTML = calendarHTML;
+            }
+            
+            // Load availability when date is selected
+            dateInput.addEventListener('change', function() {
+                const selectedDate = this.value;
+                if (selectedDate) {
+                    loadAvailability(selectedDate);
+                }
+            });
+            
+            // Load availability for today on page load if date is already set
+            if (dateInput.value) {
+                loadAvailability(dateInput.value);
+            }
+        }
+
+        // Generate calendar HTML for next 30 days
+        function generateCalendarHTML() {
+            let html = '<div class="grid grid-cols-7 gap-2 text-xs">';
+            const days = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
+            
+            // Header
+            days.forEach(day => {
+                html += `<div class="font-semibold text-center p-2">${day}</div>`;
+            });
+            
+            // Dates - start from today
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const todayStr = today.toISOString().split('T')[0];
+            
+            // Find first day of week (Monday = 0)
+            const firstDay = new Date(today);
+            const dayOfWeek = (firstDay.getDay() + 6) % 7; // Convert Sunday=0 to Monday=0
+            
+            // Add empty cells for days before the first day
+            for (let i = 0; i < dayOfWeek; i++) {
+                html += '<div></div>';
+            }
+            
+            // Add dates for next 30 days
+            for (let i = 0; i < 30; i++) {
+                const date = new Date(today);
+                date.setDate(today.getDate() + i);
+                const dateStr = date.toISOString().split('T')[0];
+                const dayNum = date.getDate();
+                const isToday = dateStr === todayStr;
+                
+                html += `<button type="button" 
+                    class="p-2 border rounded hover:bg-blue-50 text-center ${isToday ? 'bg-blue-100 font-semibold' : ''}" 
+                    onclick="selectCalendarDate('${dateStr}')"
+                    data-date="${dateStr}">
+                    ${dayNum}
+                </button>`;
+            }
+            
+            html += '</div>';
+            return html;
+        }
+
+        // Select date from calendar
+        function selectCalendarDate(dateStr) {
+            const dateInput = document.getElementById('scheduled-date');
+            if (dateInput) {
+                dateInput.value = dateStr;
+                loadAvailability(dateStr);
+            }
+        }
+
+        // Load availability data for a specific date
+        function loadAvailability(dateStr) {
+            const availabilityDetails = document.getElementById('availability-details');
+            if (!availabilityDetails) return;
+            
+            availabilityDetails.innerHTML = '<div class="text-sm text-gray-600">Laden...</div>';
+            
+            fetch(`/api/availability/${dateStr}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        availabilityDetails.innerHTML = `<div class="text-sm text-red-600">${data.error}</div>`;
+                        return;
+                    }
+                    
+                    let html = `<div class="bg-white rounded p-4 border">
+                        <h4 class="font-semibold mb-3">Beschikbaarheid op ${formatDate(dateStr)}</h4>`;
+                    
+                    // Drivers
+                    html += `<div class="mb-4">
+                        <h5 class="font-medium text-sm mb-2">Beschikbare Chauffeurs (${data.drivers.length})</h5>`;
+                    if (data.drivers.length > 0) {
+                        html += '<ul class="list-disc list-inside text-sm space-y-1">';
+                        data.drivers.forEach(driver => {
+                            html += `<li>${driver.name} - ${driver.region}</li>`;
+                        });
+                        html += '</ul>';
+                    } else {
+                        html += '<p class="text-sm text-gray-500">Geen chauffeurs beschikbaar op deze datum</p>';
+                    }
+                    html += '</div>';
+                    
+                    // Trucks
+                    html += `<div>
+                        <h5 class="font-medium text-sm mb-2">Beschikbare Trucks (${data.trucks.length})</h5>`;
+                    if (data.trucks.length > 0) {
+                        html += '<ul class="list-disc list-inside text-sm space-y-1">';
+                        data.trucks.forEach(truck => {
+                            html += `<li>${truck.region} - ${truck.used}/${truck.capacity} stops - Chauffeur: ${truck.driver}</li>`;
+                        });
+                        html += '</ul>';
+                    } else {
+                        html += '<p class="text-sm text-gray-500">Geen trucks beschikbaar op deze datum</p>';
+                    }
+                    html += '</div>';
+                    
+                    html += '</div>';
+                    availabilityDetails.innerHTML = html;
+                })
+                .catch(error => {
+                    availabilityDetails.innerHTML = `<div class="text-sm text-red-600">Fout bij laden van beschikbaarheid: ${error.message}</div>`;
+                });
+        }
+
+        // Initialize date suggestions based on region
+        function initDateSuggestions() {
+            const regionInput = document.getElementById('region-input');
+            const dateInput = document.getElementById('scheduled-date');
+            const suggestionsDiv = document.getElementById('date-suggestions');
+            
+            if (!regionInput || !dateInput || !suggestionsDiv) return;
+            
+            regionInput.addEventListener('input', function() {
+                const regionName = this.value.trim();
+                if (regionName.length >= 2) {
+                    // Debounce: wait 500ms after user stops typing
+                    clearTimeout(regionInput.suggestionTimeout);
+                    regionInput.suggestionTimeout = setTimeout(() => {
+                        loadDateSuggestions(regionName, suggestionsDiv, dateInput);
+                    }, 500);
+                } else {
+                    suggestionsDiv.innerHTML = '';
+                }
+            });
+        }
+
+        // Load date suggestions for a region
+        function loadDateSuggestions(regionName, suggestionsDiv, dateInput) {
+            suggestionsDiv.innerHTML = '<span class="text-xs text-gray-500">Zoeken naar suggesties...</span>';
+            
+            fetch(`/api/suggest-dates?region=${encodeURIComponent(regionName)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.suggestions && data.suggestions.length > 0) {
+                        let html = '<div class="mt-2"><p class="text-xs font-medium text-gray-700 mb-1">Voorgestelde datums met leveringen in deze regio:</p><div class="flex flex-wrap gap-2">';
+                        data.suggestions.slice(0, 5).forEach(suggestion => {
+                            html += `<button type="button" 
+                                class="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200" 
+                                onclick="selectSuggestedDate('${suggestion.date}')">
+                                ${formatDate(suggestion.date)} (${suggestion.delivery_count} levering${suggestion.delivery_count !== 1 ? 'en' : ''})
+                            </button>`;
+                        });
+                        html += '</div></div>';
+                        suggestionsDiv.innerHTML = html;
+                    } else {
+                        suggestionsDiv.innerHTML = '<span class="text-xs text-gray-500">Geen leveringen gevonden in deze regio</span>';
+                    }
+                })
+                .catch(error => {
+                    suggestionsDiv.innerHTML = '';
+                });
+        }
+
+        // Select suggested date
+        function selectSuggestedDate(dateStr) {
+            const dateInput = document.getElementById('scheduled-date');
+            if (dateInput) {
+                dateInput.value = dateStr;
+                loadAvailability(dateStr);
+            }
+        }
+
+        // Format date for display (DD-MM-YYYY)
+        function formatDate(dateStr) {
+            const date = new Date(dateStr + 'T00:00:00');
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const year = date.getFullYear();
+            return `${day}-${month}-${year}`;
+        }
     </script>
 {% endblock %}
 
