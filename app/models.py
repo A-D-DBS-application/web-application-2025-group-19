@@ -255,6 +255,34 @@ class OrderItem(db.Model):
         CheckConstraint('quantity > 0', name="ck_order_item_quantity_positive"),
     )
 
+# --- Truck Type Enum ---
+class TruckType(enum.Enum):
+    bestelwagen = "Bestelwagen"
+    vrachtwagen = "Vrachtwagen"
+    koelvoertuig = "Koelvoertuig"
+    open_laadruimte = "Open laadruimte"
+    speciaal_voertuig = "Speciaal voertuig"
+
+# --- truck (fysieke voertuigen) ---
+class Truck(db.Model):
+    __tablename__ = "truck"
+    tenant_id    = db.Column(db.Integer, primary_key=True)
+    truck_id     = pk_id_column(is_composite_key_part=True)
+    name         = db.Column(db.String(150), nullable=False)  # Merk & Model
+    color        = db.Column(db.String(50))
+    truck_type   = db.Column(db.Enum(TruckType, name="truck_type", native_enum=True),
+                             default=TruckType.bestelwagen)
+    capacity     = db.Column(db.String(50))  # kg of m³
+    license_plate = db.Column(db.String(20))
+    purchase_date = db.Column(db.Date)
+    active       = db.Column(db.Boolean, default=True)
+    created_at   = db.Column(db.DateTime, default=datetime.utcnow)
+    __table_args__ = (
+        ForeignKeyConstraint(["tenant_id"], ["tenant.tenant_id"], ondelete="CASCADE"),
+        UniqueConstraint("tenant_id", "license_plate", name="uq_truck_tenant_license"),
+        Index("idx_truck_tenant", "tenant_id"),
+    )
+
 # --- delivery_run (PK: tenant_id, run_id) ---
 class DeliveryRun(db.Model):
     __tablename__ = "delivery_run"
@@ -263,6 +291,7 @@ class DeliveryRun(db.Model):
     scheduled_date  = db.Column(db.Date, nullable=False)
     region_id       = db.Column(db.Integer)
     driver_id       = db.Column(db.Integer)
+    truck_id        = db.Column(db.Integer)  # Link naar fysieke truck
     capacity        = db.Column(db.Integer, default=10)   # max stops (optioneel)
     status          = db.Column(db.Enum(RunStatus, name="run_status", native_enum=True),
                                 default=RunStatus.planned)
@@ -273,6 +302,9 @@ class DeliveryRun(db.Model):
                              ondelete="SET NULL"),
         ForeignKeyConstraint(["tenant_id", "driver_id"],
                              ["employee.tenant_id", "employee.employee_id"],
+                             ondelete="SET NULL"),
+        ForeignKeyConstraint(["tenant_id", "truck_id"],
+                             ["truck.tenant_id", "truck.truck_id"],
                              ondelete="SET NULL"),
         Index("idx_run_region_date", "tenant_id", "region_id", "scheduled_date"),
     )
@@ -390,6 +422,13 @@ def get_next_delivery_id(tenant_id: int) -> int:
     """Get the next available delivery_id for a tenant."""
     max_id = db.session.query(db.func.max(Delivery.delivery_id)).filter(
         Delivery.tenant_id == tenant_id
+    ).scalar()
+    return (max_id or 0) + 1
+
+def get_next_truck_id(tenant_id: int) -> int:
+    """Get the next available truck_id for a tenant."""
+    max_id = db.session.query(db.func.max(Truck.truck_id)).filter(
+        Truck.tenant_id == tenant_id
     ).scalar()
     return (max_id or 0) + 1
 

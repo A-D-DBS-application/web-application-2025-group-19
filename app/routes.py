@@ -7,11 +7,12 @@ from decimal import Decimal
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash, current_app, jsonify
 from .models import (
     db, Tenant, Region, Location, Employee, Availability, Customer, Product,
-    CustomerOrder, OrderItem, DeliveryRun, Delivery, RegionAddress,
+    CustomerOrder, OrderItem, DeliveryRun, Delivery, RegionAddress, Truck, TruckType,
     EmployeeRole, RunStatus, set_employee_availability, get_available_drivers, add_order,
     upsert_run_and_attach_delivery_with_capacity, get_delivery_overview, suggest_delivery_days,
     find_matching_regions, get_suggested_dates_for_address, add_address_to_region,
-    create_new_region_with_address, count_deliveries_for_region_date, haversine_distance
+    create_new_region_with_address, count_deliveries_for_region_date, haversine_distance,
+    get_next_truck_id
 )
 
 # Mapbox API configuratie - wordt uit config geladen
@@ -933,78 +934,58 @@ def check_region_capacity():
 # --- Truck Management ---
 @main.route("/trucks", methods=["GET"])
 def trucks_list():
-    """Show all active trucks/routes for current tenant."""
+    """Show all trucks (physical vehicles) for current tenant."""
     if "employee_id" not in session:
         return redirect(url_for("main.login"))
     
     tid = tenant_id()
     try:
-        # Get all planned runs (trucks) for this tenant
-        trucks = db.session.query(DeliveryRun).filter(
-            DeliveryRun.tenant_id == tid,
-            DeliveryRun.status == RunStatus.planned
-        ).order_by(DeliveryRun.scheduled_date.desc()).all()
+        # Get all active trucks (physical vehicles)
+        trucks = db.session.query(Truck).filter(
+            Truck.tenant_id == tid,
+            Truck.active.is_(True)
+        ).order_by(Truck.created_at.desc()).all()
         
         truck_list = []
         for truck in trucks:
-            # Count deliveries on this run
-            delivery_count = db.session.query(db.func.count(Delivery.delivery_id)).filter(
-                Delivery.tenant_id == tid,
-                Delivery.run_id == truck.run_id
-            ).scalar() or 0
-            
-            # Get region name
-            region = db.session.query(Region).filter_by(
-                tenant_id=tid, region_id=truck.region_id
-            ).first()
-            
-            # Get driver name if assigned
-            driver_name = None
-            if truck.driver_id:
-                driver = db.session.query(Employee).filter_by(
-                    tenant_id=tid, employee_id=truck.driver_id
-                ).first()
-                if driver:
-                    driver_name = f"{driver.first_name} {driver.last_name}"
-            
             truck_list.append({
-                "run_id": truck.run_id,
-                "region": region.name if region else 'Niet ingesteld',
-                "scheduled_date": truck.scheduled_date,
-                "driver_id": truck.driver_id,
-                "driver_name": driver_name or 'Niet toegewezen',
-                "capacity": truck.capacity,
-                "delivery_count": delivery_count
+                "truck_id": truck.truck_id,
+                "name": truck.name,
+                "color": truck.color or '-',
+                "truck_type": truck.truck_type.value if truck.truck_type else '-',
+                "capacity": truck.capacity or '-',
+                "license_plate": truck.license_plate or '-',
+                "purchase_date": truck.purchase_date
             })
     except Exception as e:
         current_app.logger.exception(f"Error fetching trucks: {e}")
         truck_list = []
     
-    return render_template("trucks.html", trucks=truck_list)
+    # Get truck types for dropdown
+    truck_types = [{"value": t.name, "label": t.value} for t in TruckType]
+    
+    return render_template("trucks.html", trucks=truck_list, truck_types=truck_types)
 
 
-@main.route("/truck/<int:run_id>/delete", methods=["POST"])
-def delete_truck(run_id):
-    """Delete a truck (delivery run) and all associated deliveries."""
+@main.route("/truck/<int:truck_id>/delete", methods=["POST"])
+def delete_truck(truck_id):
+    """Delete a truck (set inactive)."""
     if "employee_id" not in session:
         flash("Log in om trucks te verwijderen.", "error")
         return redirect(url_for("main.login"))
     
     tid = tenant_id()
     try:
-        # Find the delivery run
-        run = DeliveryRun.query.filter_by(tenant_id=tid, run_id=run_id).first()
-        if not run:
+        # Find the truck
+        truck = Truck.query.filter_by(tenant_id=tid, truck_id=truck_id).first()
+        if not truck:
             flash("Truck niet gevonden.", "error")
             return redirect(url_for("main.trucks_list"))
         
-        # Delete all deliveries associated with this run first
-        Delivery.query.filter_by(tenant_id=tid, run_id=run_id).delete()
-        
-        # Then delete the run itself
-        db.session.delete(run)
+        # Set truck to inactive instead of deleting
+        truck.active = False
         db.session.commit()
-        flash(f"Truck op {run.scheduled_date} is verwijderd.", "success")
+        flash(f"Truck '{truck.name}' is verwijderd.", "success")
     except Exception as e:
         db.session.rollback()
         current_app.logger.exception(f"Error deleting truck: {e}")
@@ -1091,46 +1072,72 @@ def delete_driver(employee_id):
     return redirect(url_for("main.drivers_list"))
 
 
-# --- Truck Management ---
+# --- Truck Management (Physical Vehicles) ---
 @main.route("/add-truck", methods=["POST"])
 def add_truck():
-    """Add a new truck (delivery run) with specified date and capacity."""
+    """Add a new physical truck with all details."""
     if "employee_id" not in session:
         return redirect(url_for("main.login"))
     
     tid = tenant_id()
-    scheduled_date_str = request.form.get("scheduled_date", "").strip()
-    capacity_str = request.form.get("capacity", "").strip()
     
-    if not scheduled_date_str or not capacity_str:
-        flash("Selecteer alstublieft een datum en voer capaciteit in.", "error")
-        return redirect(url_for("main.index"))
+    # Get form data
+    name = request.form.get("name", "").strip()
+    color = request.form.get("color", "").strip()
+    truck_type_str = request.form.get("truck_type", "").strip()
+    capacity = request.form.get("capacity", "").strip()
+    license_plate = request.form.get("license_plate", "").strip()
+    purchase_date_str = request.form.get("purchase_date", "").strip()
+    
+    if not name:
+        flash("Vul de naam van de truck in (Merk & Model).", "error")
+        return redirect(url_for("main.trucks_list"))
     
     try:
-        scheduled_date = datetime.strptime(scheduled_date_str, "%Y-%m-%d").date()
-        capacity = int(capacity_str)
+        # Parse truck type
+        truck_type = None
+        if truck_type_str:
+            try:
+                truck_type = TruckType[truck_type_str]
+            except KeyError:
+                truck_type = TruckType.bestelwagen
         
-        if capacity <= 0:
-            raise ValueError("Capaciteit moet groter dan 0 zijn.")
+        # Parse purchase date
+        purchase_date = None
+        if purchase_date_str:
+            try:
+                purchase_date = datetime.strptime(purchase_date_str, "%Y-%m-%d").date()
+            except ValueError:
+                pass
         
-        # Create new delivery run (truck)
-        run = DeliveryRun(
+        # Check for duplicate license plate
+        if license_plate:
+            existing = Truck.query.filter_by(tenant_id=tid, license_plate=license_plate, active=True).first()
+            if existing:
+                flash(f"Er bestaat al een truck met nummerplaat {license_plate}.", "error")
+                return redirect(url_for("main.trucks_list"))
+        
+        # Create new truck
+        truck_id = get_next_truck_id(tid)
+        truck = Truck(
             tenant_id=tid,
-            scheduled_date=scheduled_date,
-            capacity=capacity,
-            status=RunStatus.planned
+            truck_id=truck_id,
+            name=name,
+            color=color or None,
+            truck_type=truck_type,
+            capacity=capacity or None,
+            license_plate=license_plate or None,
+            purchase_date=purchase_date,
+            active=True
         )
-        db.session.add(run)
+        db.session.add(truck)
         db.session.commit()
         
-        flash(f"Truck toegevoegd voor {scheduled_date.strftime('%d-%m-%Y')} met capaciteit {capacity}.", "success")
-        current_app.logger.info(f"Added truck for {scheduled_date} with capacity {capacity}")
-    except ValueError as e:
-        current_app.logger.error(f"Invalid input for truck: {e}")
-        flash(f"Ongeldige invoer: {e}", "error")
+        flash(f"Truck '{name}' succesvol toegevoegd.", "success")
+        current_app.logger.info(f"Added truck: {name} ({license_plate})")
     except Exception as e:
         db.session.rollback()
         current_app.logger.exception(f"Error adding truck: {e}")
         flash("Fout bij het toevoegen van truck.", "error")
     
-    return redirect(url_for("main.index"))
+    return redirect(url_for("main.trucks_list"))
