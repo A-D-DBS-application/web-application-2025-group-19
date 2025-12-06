@@ -1,43 +1,53 @@
 {% extends 'base.html' %}
 {% block title %}Registreren — Delivery Schedule{% endblock %}
+{% block body_class %}auth-page{% endblock %}
 
 {% block content %}
-    <div class="max-w-md mx-auto bg-white rounded-lg shadow p-8">
-        <div class="flex justify-center mb-4">
-            <div class="w-14 h-14 bg-black rounded-2xl flex items-center justify-center text-white">
-
-                <!-- Vervangen door icoon dat eruitziet als jouw voorbeeld -->
-                <svg class="w-7 h-7" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M3 5a2 2 0 012-2h8a2 2 0 012 2v6h1.5a2 2 0 011.6.8l2.4 3.2c.3.4.5.9.5 1.4V19a2 2 0 01-2 2h-1a2 2 0 11-4 0H9a2 2 0 11-4 0H5a2 2 0 01-2-2V5zm14 10h3l-2-2.7a1 1 0 00-.8-.4H17v3z"/>
-                </svg>
-
-            </div>
+<div style="max-width: 420px; margin: 2rem auto;">
+  <div class="card auth-card">
+    <div class="card-body p-5">
+      <!-- Logo -->
+      <div class="text-center mb-4">
+        <div style="width: 56px; height: 56px; background: linear-gradient(135deg, var(--color-navy) 0%, var(--color-stone-blue) 100%); border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; color: white; margin-bottom: 1rem; box-shadow: 0 4px 6px -1px rgba(27, 38, 59, 0.3);">
+          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/>
+            <path d="M15 18H9"/>
+            <path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/>
+            <circle cx="17" cy="18" r="2"/>
+            <circle cx="7" cy="18" r="2"/>
+          </svg>
         </div>
-        <h1 class="text-center mb-4 text-xl font-semibold">Leveringsplanning – Registreren</h1>
+        <h1 style="font-size: 1.25rem; font-weight: 600; color: var(--color-black);">Account aanmaken</h1>
+        <p class="text-small text-muted mt-1">Registreer om te beginnen</p>
+      </div>
 
-        <form method="POST" action="{{ url_for('main.register') }}" class="space-y-4">
-            <div class="grid grid-cols-2 gap-3">
-                <div>
-                    <label class="block text-sm text-gray-600">Voornaam</label>
-                    <input name="firstname" class="w-full border rounded-md px-3 py-2" required>
-                </div>
-                <div>
-                    <label class="block text-sm text-gray-600">Achternaam</label>
-                    <input name="lastname" class="w-full border rounded-md px-3 py-2" required>
-                </div>
-            </div>
-            <div>
-                <label class="block text-sm text-gray-600">E-mailadres</label>
-                <input name="email" type="email" class="w-full border rounded-md px-3 py-2" required>
-            </div>
-            <div>
-                <label class="block text-sm text-gray-600">Wachtwoord</label>
-                <input name="password" type="password" class="w-full border rounded-md px-3 py-2" required>
-            </div>
+      <form method="POST" action="{{ url_for('main.register') }}">
+        <div class="grid grid-cols-2 gap-3">
+          <div class="form-group">
+            <label class="form-label">Voornaam</label>
+            <input name="firstname" type="text" class="form-input" placeholder="Jan" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Achternaam</label>
+            <input name="lastname" type="text" class="form-input" placeholder="Janssen" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">E-mailadres</label>
+          <input name="email" type="email" class="form-input" placeholder="jan.janssen@bedrijf.be" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Wachtwoord</label>
+          <input name="password" type="password" class="form-input" placeholder="••••••••" required>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block mt-4">Account aanmaken</button>
+      </form>
 
-            <button class="w-full bg-black text-white py-2 rounded">Account aanmaken</button>
-            <p class="text-center text-sm mt-3">Al een account?
-                <a href="{{ url_for('main.login') }}" class="text-blue-600">Inloggen</a></p>
-        </form>
+      <p class="text-center text-small mt-4" style="color: var(--color-medium-gray);">
+        Al een account? 
+        <a href="{{ url_for('main.login') }}" style="color: var(--color-navy); font-weight: 500;">Inloggen</a>
+      </p>
     </div>
+  </div>
+</div>
 {% endblock %}

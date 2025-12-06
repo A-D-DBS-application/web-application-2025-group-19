@@ -1,500 +1,264 @@
 {% extends 'base.html' %}
-{% block title %}Nieuwe Levering Plannen — Delivery Schedule{% endblock %}
+{% block title %}Nieuwe Levering — Delivery Schedule{% endblock %}
 
 {% block content %}
-    <style>
-        .card-ghost { border-radius: 12px; border:1px solid #eee; background:#fff; }
-        .suggestion-card {
-            transition: all 0.2s ease;
-            cursor: pointer;
-        }
-        .suggestion-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        }
-        .suggestion-card.selected {
-            border-color: #3b82f6;
-            background-color: #eff6ff;
-        }
-        .geocode-status {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 12px;
-            border-radius: 6px;
-            font-size: 0.875rem;
-        }
-        .geocode-status.loading { background: #fef3c7; color: #92400e; }
-        .geocode-status.success { background: #d1fae5; color: #065f46; }
-        .geocode-status.error { background: #fee2e2; color: #991b1b; }
-        .capacity-bar {
-            height: 6px;
-            border-radius: 3px;
-            background: #e5e7eb;
-            overflow: hidden;
-        }
-        .capacity-fill {
-            height: 100%;
-            border-radius: 3px;
-            transition: width 0.3s ease;
-        }
-    </style>
+<div class="page-header">
+  <h1 class="page-title">Nieuwe Levering Plannen</h1>
+  <p class="page-subtitle">Plan een nieuwe levering door het formulier in te vullen.</p>
+</div>
 
-    <div class="mb-6">
-        <div class="flex items-center gap-3">
-            <div class="w-10 h-10 bg-black rounded-md flex items-center justify-center text-white">
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+<div class="grid" style="grid-template-columns: 2fr 1fr; gap: 1.5rem;">
+  <!-- Formulier -->
+  <div>
+    <div class="card mb-4">
+      <div class="card-header">
+        <h2 class="font-semibold">Leveringsgegevens</h2>
+      </div>
+      <div class="card-body">
+        <form method="POST" action="{{ url_for('main.schedule') }}" id="delivery-form">
+          <!-- Hidden fields -->
+          <input type="hidden" name="lat" id="lat-input" value="">
+          <input type="hidden" name="lng" id="lng-input" value="">
+          <input type="hidden" name="selected_region_id" id="selected-region-id" value="">
+          <input type="hidden" name="region_id" id="region-input" value="">
+
+          <div class="form-group">
+            <label class="form-label">Adres</label>
+            <input type="text" name="address" id="delivery-address" placeholder="Kerkstraat 10, 1000 Brussel" class="form-input" required>
+            <div id="geocode-status" class="mt-2 hidden"></div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Leveringsdatum</label>
+            <input type="date" name="scheduled_date" id="scheduled-date" class="form-input" required>
+            <div id="location-suggestions" class="mt-3 hidden">
+              <p class="text-small font-medium mb-2" style="color: var(--color-dark-gray);">Voorgestelde datums in deze regio:</p>
+              <div id="suggestion-cards" style="display: flex; flex-direction: column; gap: 0.5rem;"></div>
             </div>
-            <h1 class="text-2xl font-semibold">Nieuwe Levering Plannen</h1>
+            <div id="no-suggestions" class="mt-3 hidden">
+              <p class="text-small text-muted">Dit adres valt niet binnen een bestaande regio. Er wordt een nieuwe regio aangemaakt.</p>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Product ID</label>
+            <input type="number" name="order_id" placeholder="12345" class="form-input" required>
+          </div>
+
+          <button type="submit" class="btn btn-primary mt-3">Levering Plannen</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Regio Info -->
+    <div id="region-info" class="card hidden">
+      <div class="card-header">
+        <h3 class="font-semibold">Geselecteerde Regio</h3>
+      </div>
+      <div class="card-body" id="region-details"></div>
+    </div>
+  </div>
+
+  <!-- Zijbalk -->
+  <div>
+    <div class="card mb-4">
+      <div class="card-header">
+        <h3 class="font-semibold">Hoe het werkt</h3>
+      </div>
+      <div class="card-body">
+        <div style="display: flex; flex-direction: column; gap: 1rem;">
+          <div style="display: flex; gap: 0.75rem; align-items: flex-start;">
+            <div style="width: 24px; height: 24px; border-radius: 50%; background: var(--color-navy); color: white; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 600; flex-shrink: 0;">1</div>
+            <p class="text-small">Voer het volledige leveradres in</p>
+          </div>
+          <div style="display: flex; gap: 0.75rem; align-items: flex-start;">
+            <div style="width: 24px; height: 24px; border-radius: 50%; background: var(--color-navy); color: white; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 600; flex-shrink: 0;">2</div>
+            <p class="text-small">Het systeem zoekt automatisch regio's binnen 30km</p>
+          </div>
+          <div style="display: flex; gap: 0.75rem; align-items: flex-start;">
+            <div style="width: 24px; height: 24px; border-radius: 50%; background: var(--color-navy); color: white; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 600; flex-shrink: 0;">3</div>
+            <p class="text-small">Datums met minder dan 13 leveringen worden voorgesteld</p>
+          </div>
+          <div style="display: flex; gap: 0.75rem; align-items: flex-start;">
+            <div style="width: 24px; height: 24px; border-radius: 50%; background: var(--color-navy); color: white; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 600; flex-shrink: 0;">4</div>
+            <p class="text-small">Kies een datum en het adres wordt toegevoegd</p>
+          </div>
         </div>
-        <p class="mt-2 text-gray-600">Plan een nieuwe levering door het onderstaande formulier in te vullen.</p>
+      </div>
     </div>
 
-    <div class="grid grid-cols-12 gap-6">
-        <section class="col-span-8">
-            <div class="card-ghost p-6 mb-6">
-                <h2 class="mb-4 font-semibold text-lg">Levering Details</h2>
-                <form method="POST" action="{{ url_for('main.schedule') }}" class="max-w-lg" id="delivery-form">
-                    <!-- Hidden fields voor coördinaten en geselecteerde regio -->
-                    <input type="hidden" name="lat" id="lat-input" value="">
-                    <input type="hidden" name="lng" id="lng-input" value="">
-                    <input type="hidden" name="selected_region_id" id="selected-region-id" value="">
-                    <input type="hidden" name="region_id" id="region-input" value="">
-                    
-                    <div class="mb-4">
-                        <label class="block text-sm text-gray-600 mb-1">Adres *</label>
-                        <input type="text" name="address" id="delivery-address" placeholder="Bijv. Kerkstraat 10, 1000 Brussel" class="w-full border rounded-md p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" required>
-                        <div id="geocode-status" class="mt-2 hidden"></div>
-                        <p class="text-xs text-gray-500 mt-1">Voer een volledig adres in voor automatische datum suggesties</p>
-                    </div>
-                    
-                    <div class="mb-4">
-                        <label class="block text-sm text-gray-600 mb-1">Selecteer leveringsdatum *</label>
-                        <input type="date" name="scheduled_date" id="scheduled-date" class="w-full border rounded-md p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" required>
-                        
-                        <!-- Datum suggesties gebaseerd op locatie -->
-                        <div id="location-suggestions" class="mt-3 hidden">
-                            <p class="text-sm font-medium text-gray-700 mb-2">📍 Voorgestelde datums in deze regio:</p>
-                            <div id="suggestion-cards" class="space-y-2"></div>
-                        </div>
-                        
-                        <!-- Geen suggesties melding -->
-                        <div id="no-suggestions" class="mt-3 hidden">
-                            <p class="text-sm text-gray-500">Dit adres valt niet binnen een bestaande regio (30km). Er wordt een nieuwe regio aangemaakt.</p>
-                        </div>
-                    </div>
-                    
-                    <div class="mb-4">
-                        <label class="block text-sm text-gray-600 mb-1">Product ID *</label>
-                        <input type="number" name="order_id" placeholder="Voer product ID in" class="w-full border rounded-md p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" required>
-                    </div>
-                    
-                    <button type="submit" id="submit-btn" class="mt-3 w-full bg-black text-white py-3 rounded-md hover:bg-gray-800 transition font-medium">
-                        Levering Plannen
-                    </button>
-</form>
-            </div>
-            
-            <!-- Regio informatie -->
-            <div id="region-info" class="card-ghost p-6 mb-6 hidden">
-                <h3 class="mb-4 font-semibold text-lg">📍 Regio Informatie</h3>
-                <div id="region-details"></div>
-            </div>
-            
-            <!-- Calendar voor beschikbaarheid -->
-            <div class="card-ghost p-6">
-                <h3 class="mb-4 font-semibold text-lg">Beschikbaarheid Kalender</h3>
-                <div id="availability-calendar" class="border rounded-md p-4 bg-gray-50">
-                    <div class="text-sm text-gray-600 mb-4">Selecteer een datum hierboven of klik op een dag om beschikbaarheid te zien</div>
-                    <div id="calendar-container"></div>
-                    <div id="availability-details" class="mt-4"></div>
-                </div>
-            </div>
-        </section>
-
-        <aside class="col-span-4">
-            <div class="card-ghost p-4 mb-6">
-                <h3 class="font-semibold mb-3">🚚 Hoe het werkt</h3>
-                <ul class="text-sm text-gray-600 space-y-3">
-                    <li class="flex items-start gap-2">
-                        <span class="bg-blue-100 text-blue-700 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold flex-shrink-0">1</span>
-                        <span>Voer het volledige leveradres in</span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <span class="bg-blue-100 text-blue-700 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold flex-shrink-0">2</span>
-                        <span>Het systeem zoekt automatisch naar bestaande regio's binnen 30km</span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <span class="bg-blue-100 text-blue-700 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold flex-shrink-0">3</span>
-                        <span>Datums met minder dan 13 leveringen worden als suggestie getoond</span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <span class="bg-blue-100 text-blue-700 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold flex-shrink-0">4</span>
-                        <span>Kies een datum en het adres wordt aan de regio toegevoegd</span>
-                    </li>
-                </ul>
-            </div>
-            
-            <div class="card-ghost p-4 mb-6">
-                <h3 class="font-semibold mb-3">📊 Regio Regels</h3>
-                <ul class="text-sm text-gray-600 space-y-2">
-                    <li class="flex items-start gap-2">
-                        <span class="text-green-500">•</span>
-                        <span><strong>Straal:</strong> 30 km vanaf centrum</span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <span class="text-green-500">•</span>
-                        <span><strong>Max leveringen:</strong> 13 per dag per regio</span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <span class="text-green-500">•</span>
-                        <span><strong>Centrum:</strong> Wordt herberekend bij elk nieuw adres</span>
-                    </li>
-                </ul>
-            </div>
-            
-        </aside>
+    <div class="card">
+      <div class="card-header">
+        <h3 class="font-semibold">Regio Regels</h3>
+      </div>
+      <div class="card-body">
+        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+          <div class="flex items-center gap-2">
+            <span style="color: var(--color-success);">•</span>
+            <span class="text-small"><strong>Straal:</strong> 30 km vanaf centrum</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span style="color: var(--color-success);">•</span>
+            <span class="text-small"><strong>Max leveringen:</strong> 13 per dag per regio</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span style="color: var(--color-success);">•</span>
+            <span class="text-small"><strong>Centrum:</strong> Wordt herberekend per nieuw adres</span>
+          </div>
+        </div>
+      </div>
     </div>
+  </div>
+</div>
 
-    <script>
-        // Globale variabelen
-        let currentLat = null;
-        let currentLng = null;
-        let currentSuggestions = [];
-        let geocodeTimeout = null;
+<script>
+  let currentLat = null;
+  let currentLng = null;
+  let currentSuggestions = [];
+  let geocodeTimeout = null;
 
-        document.addEventListener('DOMContentLoaded', function() {
-            initAddressGeocoding();
-            initAvailabilityCalendar();
-        });
+  document.addEventListener('DOMContentLoaded', function() {
+    initAddressGeocoding();
+  });
 
-        // ========== MAPBOX GEOCODING ==========
-        function initAddressGeocoding() {
-            const addressInput = document.getElementById('delivery-address');
-            if (!addressInput) return;
+  function initAddressGeocoding() {
+    const addressInput = document.getElementById('delivery-address');
+    if (!addressInput) return;
 
-            addressInput.addEventListener('input', function() {
-                const address = this.value.trim();
-                
-                // Debounce: wacht 800ms na laatste toetsaanslag
-                clearTimeout(geocodeTimeout);
-                
-                if (address.length >= 5) {
-                    geocodeTimeout = setTimeout(() => {
-                        geocodeAddress(address);
-                    }, 800);
-                } else {
-                    hideGeocodeStatus();
-                    hideSuggestions();
-                }
-            });
+    addressInput.addEventListener('input', function() {
+      const address = this.value.trim();
+      clearTimeout(geocodeTimeout);
+      
+      if (address.length >= 5) {
+        geocodeTimeout = setTimeout(() => geocodeAddress(address), 800);
+      } else {
+        hideGeocodeStatus();
+        hideSuggestions();
+      }
+    });
+  }
+
+  function geocodeAddress(address) {
+    showGeocodeStatus('loading', 'Adres zoeken...');
+    
+    fetch(`/api/geocode?address=${encodeURIComponent(address)}`)
+      .then(response => response.json())
+      .then(data => {
+        if (data.error) {
+          showGeocodeStatus('error', data.error);
+          hideSuggestions();
+          return;
         }
+        
+        currentLat = data.lat;
+        currentLng = data.lng;
+        document.getElementById('lat-input').value = data.lat;
+        document.getElementById('lng-input').value = data.lng;
+        
+        showGeocodeStatus('success', 'Gevonden: ' + data.formatted_address);
+        loadLocationSuggestions(data.lat, data.lng);
+      })
+      .catch(error => {
+        showGeocodeStatus('error', 'Kon adres niet vinden');
+        hideSuggestions();
+      });
+  }
 
-        function geocodeAddress(address) {
-            showGeocodeStatus('loading', '🔍 Adres zoeken...');
-            
-            fetch(`/api/geocode?address=${encodeURIComponent(address)}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.error) {
-                        showGeocodeStatus('error', `❌ ${data.error}`);
-                        hideSuggestions();
-                        return;
-                    }
-                    
-                    // Sla coördinaten op
-                    currentLat = data.lat;
-                    currentLng = data.lng;
-                    
-                    // Zet hidden fields
-                    document.getElementById('lat-input').value = data.lat;
-                    document.getElementById('lng-input').value = data.lng;
-                    
-                    showGeocodeStatus('success', `✅ Gevonden: ${data.formatted_address}`);
-                    
-                    // Haal datum suggesties op
-                    loadLocationSuggestions(data.lat, data.lng);
-                })
-                .catch(error => {
-                    console.error('Geocoding error:', error);
-                    showGeocodeStatus('error', '❌ Kon adres niet vinden');
-                    hideSuggestions();
-                });
-        }
+  function showGeocodeStatus(type, message) {
+    const statusDiv = document.getElementById('geocode-status');
+    const colors = {
+      loading: { bg: 'rgba(65, 90, 119, 0.1)', color: 'var(--color-stone-blue)' },
+      success: { bg: 'rgba(46, 125, 74, 0.1)', color: 'var(--color-success)' },
+      error: { bg: 'rgba(155, 44, 44, 0.1)', color: 'var(--color-error)' }
+    };
+    statusDiv.style.background = colors[type].bg;
+    statusDiv.style.color = colors[type].color;
+    statusDiv.style.padding = '0.5rem 0.75rem';
+    statusDiv.style.borderRadius = '6px';
+    statusDiv.style.fontSize = '0.875rem';
+    statusDiv.textContent = message;
+    statusDiv.classList.remove('hidden');
+  }
 
-        function showGeocodeStatus(type, message) {
-            const statusDiv = document.getElementById('geocode-status');
-            statusDiv.className = `geocode-status ${type}`;
-            statusDiv.textContent = message;
-            statusDiv.classList.remove('hidden');
-        }
+  function hideGeocodeStatus() {
+    document.getElementById('geocode-status').classList.add('hidden');
+  }
 
-        function hideGeocodeStatus() {
-            document.getElementById('geocode-status').classList.add('hidden');
+  function loadLocationSuggestions(lat, lng) {
+    fetch(`/api/suggest-dates-by-location?lat=${lat}&lng=${lng}`)
+      .then(response => response.json())
+      .then(data => {
+        currentSuggestions = data.suggestions || [];
+        if (currentSuggestions.length > 0) {
+          showSuggestions(currentSuggestions);
+        } else {
+          showNoSuggestions();
         }
+      })
+      .catch(() => hideSuggestions());
+  }
 
-        // ========== DATUM SUGGESTIES GEBASEERD OP LOCATIE ==========
-        function loadLocationSuggestions(lat, lng) {
-            fetch(`/api/suggest-dates-by-location?lat=${lat}&lng=${lng}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.error) {
-                        console.error('Suggestions error:', data.error);
-                        hideSuggestions();
-                        return;
-                    }
-                    
-                    currentSuggestions = data.suggestions || [];
-                    
-                    if (currentSuggestions.length > 0) {
-                        showSuggestions(currentSuggestions);
-                    } else {
-                        showNoSuggestions();
-                    }
-                })
-                .catch(error => {
-                    console.error('Suggestions fetch error:', error);
-                    hideSuggestions();
-                });
-        }
+  function showSuggestions(suggestions) {
+    const container = document.getElementById('location-suggestions');
+    const cardsDiv = document.getElementById('suggestion-cards');
+    document.getElementById('no-suggestions').classList.add('hidden');
+    container.classList.remove('hidden');
+    
+    let html = '';
+    suggestions.slice(0, 8).forEach((s, index) => {
+      const capacityPercent = Math.round((s.delivery_count / 13) * 100);
+      html += `
+        <div onclick="selectSuggestion(${index})" style="padding: 0.75rem; border: 1px solid rgba(0,0,0,0.1); border-radius: 6px; cursor: pointer; transition: all 0.15s;" 
+             onmouseover="this.style.borderColor='var(--color-navy)'; this.style.background='rgba(27,38,59,0.04)';"
+             onmouseout="this.style.borderColor='rgba(0,0,0,0.1)'; this.style.background='transparent';"
+             data-index="${index}">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span class="font-medium">${formatDate(s.date)}</span>
+            <span class="badge ${s.spots_left <= 3 ? 'badge-warning' : 'badge-success'}">${s.spots_left} plekken vrij</span>
+          </div>
+          <div class="text-xs text-muted mt-1">${s.region_name} · ${s.distance_km} km · ${s.delivery_count}/13 leveringen</div>
+        </div>
+      `;
+    });
+    cardsDiv.innerHTML = html;
+  }
 
-        function showSuggestions(suggestions) {
-            const container = document.getElementById('location-suggestions');
-            const cardsDiv = document.getElementById('suggestion-cards');
-            const noSuggestions = document.getElementById('no-suggestions');
-            
-            noSuggestions.classList.add('hidden');
-            container.classList.remove('hidden');
-            
-            let html = '';
-            
-            // Toon maximaal 10 suggesties
-            suggestions.slice(0, 10).forEach((s, index) => {
-                const capacityPercent = Math.round((s.delivery_count / 13) * 100);
-                const capacityColor = capacityPercent < 50 ? '#22c55e' : capacityPercent < 80 ? '#f59e0b' : '#ef4444';
-                
-                html += `
-                    <div class="suggestion-card border rounded-lg p-3 bg-white" 
-                         data-date="${s.date}" 
-                         data-region-id="${s.region_id}"
-                         onclick="selectSuggestion(${index})">
-                        <div class="flex justify-between items-start mb-2">
-                            <div>
-                                <span class="font-medium">${formatDate(s.date)}</span>
-                                <span class="text-xs text-gray-500 ml-2">${s.region_name}</span>
-                            </div>
-                            <span class="text-xs px-2 py-1 rounded-full ${s.spots_left <= 3 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}">
-                                ${s.spots_left} plekken vrij
-                            </span>
-                        </div>
-                        <div class="flex items-center gap-2 text-xs text-gray-500">
-                            <span>📍 ${s.distance_km} km afstand</span>
-                            <span>•</span>
-                            <span>${s.delivery_count}/13 leveringen</span>
-                        </div>
-                        <div class="capacity-bar mt-2">
-                            <div class="capacity-fill" style="width: ${capacityPercent}%; background-color: ${capacityColor};"></div>
-                        </div>
-                    </div>
-                `;
-            });
-            
-            cardsDiv.innerHTML = html;
-        }
+  function showNoSuggestions() {
+    document.getElementById('location-suggestions').classList.add('hidden');
+    document.getElementById('no-suggestions').classList.remove('hidden');
+    document.getElementById('selected-region-id').value = '';
+  }
 
-        function showNoSuggestions() {
-            document.getElementById('location-suggestions').classList.add('hidden');
-            document.getElementById('no-suggestions').classList.remove('hidden');
-            
-            // Reset selected region
-            document.getElementById('selected-region-id').value = '';
-        }
+  function hideSuggestions() {
+    document.getElementById('location-suggestions').classList.add('hidden');
+    document.getElementById('no-suggestions').classList.add('hidden');
+  }
 
-        function hideSuggestions() {
-            document.getElementById('location-suggestions').classList.add('hidden');
-            document.getElementById('no-suggestions').classList.add('hidden');
-        }
+  function selectSuggestion(index) {
+    const s = currentSuggestions[index];
+    if (!s) return;
+    
+    document.getElementById('scheduled-date').value = s.date;
+    document.getElementById('selected-region-id').value = s.region_id;
+    document.getElementById('region-input').value = s.region_name;
+    
+    // Show region info
+    const infoDiv = document.getElementById('region-info');
+    const detailsDiv = document.getElementById('region-details');
+    detailsDiv.innerHTML = `
+      <div class="grid grid-cols-2 gap-3">
+        <div><p class="text-xs text-muted">Regio</p><p class="font-medium">${s.region_name}</p></div>
+        <div><p class="text-xs text-muted">Afstand</p><p class="font-medium">${s.distance_km} km</p></div>
+        <div><p class="text-xs text-muted">Leveringen</p><p class="font-medium">${s.delivery_count} van 13</p></div>
+        <div><p class="text-xs text-muted">Datum</p><p class="font-medium">${formatDate(s.date)}</p></div>
+      </div>
+    `;
+    infoDiv.classList.remove('hidden');
+  }
 
-        function selectSuggestion(index) {
-            const suggestion = currentSuggestions[index];
-            if (!suggestion) return;
-            
-            // Zet datum
-            document.getElementById('scheduled-date').value = suggestion.date;
-            
-            // Zet geselecteerde regio
-            document.getElementById('selected-region-id').value = suggestion.region_id;
-            document.getElementById('region-input').value = suggestion.region_name;
-            
-            // Visuele feedback
-            document.querySelectorAll('.suggestion-card').forEach((card, i) => {
-                card.classList.toggle('selected', i === index);
-            });
-            
-            // Toon regio info
-            showRegionInfo(suggestion);
-            
-            // Laad beschikbaarheid voor deze datum
-            loadAvailability(suggestion.date);
-        }
-
-        function showRegionInfo(suggestion) {
-            const infoDiv = document.getElementById('region-info');
-            const detailsDiv = document.getElementById('region-details');
-            
-            detailsDiv.innerHTML = `
-                <div class="grid grid-cols-2 gap-4">
-                    <div class="bg-gray-50 rounded-lg p-3">
-                        <div class="text-xs text-gray-500">Regio</div>
-                        <div class="font-medium">${suggestion.region_name}</div>
-                    </div>
-                    <div class="bg-gray-50 rounded-lg p-3">
-                        <div class="text-xs text-gray-500">Afstand tot centrum</div>
-                        <div class="font-medium">${suggestion.distance_km} km</div>
-                    </div>
-                    <div class="bg-gray-50 rounded-lg p-3">
-                        <div class="text-xs text-gray-500">Huidige leveringen</div>
-                        <div class="font-medium">${suggestion.delivery_count} van 13</div>
-                    </div>
-                    <div class="bg-gray-50 rounded-lg p-3">
-                        <div class="text-xs text-gray-500">Datum</div>
-                        <div class="font-medium">${formatDate(suggestion.date)}</div>
-                    </div>
-                </div>
-            `;
-            
-            infoDiv.classList.remove('hidden');
-        }
-
-        // ========== KALENDER ==========
-        function initAvailabilityCalendar() {
-            const dateInput = document.getElementById('scheduled-date');
-            const availabilityDetails = document.getElementById('availability-details');
-            const calendarContainer = document.getElementById('calendar-container');
-            
-            if (!dateInput || !availabilityDetails) return;
-            
-            const calendarHTML = generateCalendarHTML();
-            if (calendarContainer) {
-                calendarContainer.innerHTML = calendarHTML;
-            }
-            
-            dateInput.addEventListener('change', function() {
-                const selectedDate = this.value;
-                if (selectedDate) {
-                    loadAvailability(selectedDate);
-                }
-            });
-            
-            if (dateInput.value) {
-                loadAvailability(dateInput.value);
-            }
-        }
-
-        function generateCalendarHTML() {
-            let html = '<div class="grid grid-cols-7 gap-2 text-xs">';
-            const days = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
-            
-            days.forEach(day => {
-                html += `<div class="font-semibold text-center p-2">${day}</div>`;
-            });
-            
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const todayStr = today.toISOString().split('T')[0];
-            
-            const firstDay = new Date(today);
-            const dayOfWeek = (firstDay.getDay() + 6) % 7;
-            
-            for (let i = 0; i < dayOfWeek; i++) {
-                html += '<div></div>';
-            }
-            
-            for (let i = 0; i < 30; i++) {
-                const date = new Date(today);
-                date.setDate(today.getDate() + i);
-                const dateStr = date.toISOString().split('T')[0];
-                const dayNum = date.getDate();
-                const isToday = dateStr === todayStr;
-                
-                html += `<button type="button" 
-                    class="p-2 border rounded hover:bg-blue-50 text-center ${isToday ? 'bg-blue-100 font-semibold' : ''}" 
-                    onclick="selectCalendarDate('${dateStr}')"
-                    data-date="${dateStr}">
-                    ${dayNum}
-                </button>`;
-            }
-            
-            html += '</div>';
-            return html;
-        }
-
-        function selectCalendarDate(dateStr) {
-            const dateInput = document.getElementById('scheduled-date');
-            if (dateInput) {
-                dateInput.value = dateStr;
-                loadAvailability(dateStr);
-            }
-        }
-
-        function loadAvailability(dateStr) {
-            const availabilityDetails = document.getElementById('availability-details');
-            if (!availabilityDetails) return;
-            
-            availabilityDetails.innerHTML = '<div class="text-sm text-gray-600">Laden...</div>';
-            
-            fetch(`/api/availability/${dateStr}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.error) {
-                        availabilityDetails.innerHTML = `<div class="text-sm text-red-600">${data.error}</div>`;
-                        return;
-                    }
-                    
-                    let html = `<div class="bg-white rounded p-4 border">
-                        <h4 class="font-semibold mb-3">Beschikbaarheid op ${formatDate(dateStr)}</h4>`;
-                    
-                    html += `<div class="mb-4">
-                        <h5 class="font-medium text-sm mb-2">Beschikbare Chauffeurs (${data.drivers.length})</h5>`;
-                    if (data.drivers.length > 0) {
-                        html += '<ul class="list-disc list-inside text-sm space-y-1">';
-                        data.drivers.forEach(driver => {
-                            html += `<li>${driver.name} - ${driver.region}</li>`;
-                        });
-                        html += '</ul>';
-                    } else {
-                        html += '<p class="text-sm text-gray-500">Geen chauffeurs beschikbaar op deze datum</p>';
-                    }
-                    html += '</div>';
-                    
-                    html += `<div>
-                        <h5 class="font-medium text-sm mb-2">Beschikbare Trucks (${data.trucks.length})</h5>`;
-                    if (data.trucks.length > 0) {
-                        html += '<ul class="list-disc list-inside text-sm space-y-1">';
-                        data.trucks.forEach(truck => {
-                            html += `<li>${truck.region} - ${truck.used}/${truck.capacity} stops - Chauffeur: ${truck.driver}</li>`;
-                        });
-                        html += '</ul>';
-                    } else {
-                        html += '<p class="text-sm text-gray-500">Geen trucks beschikbaar op deze datum</p>';
-                    }
-                    html += '</div>';
-                    
-                    html += '</div>';
-                    availabilityDetails.innerHTML = html;
-                })
-                .catch(error => {
-                    availabilityDetails.innerHTML = `<div class="text-sm text-red-600">Fout bij laden: ${error.message}</div>`;
-                });
-        }
-
-        // ========== UTILITIES ==========
-        function formatDate(dateStr) {
-            const date = new Date(dateStr + 'T00:00:00');
-            const day = String(date.getDate()).padStart(2, '0');
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const year = date.getFullYear();
-            return `${day}-${month}-${year}`;
-        }
-    </script>
+  function formatDate(dateStr) {
+    const d = new Date(dateStr + 'T00:00:00');
+    return d.toLocaleDateString('nl-BE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  }
+</script>
 {% endblock %}
