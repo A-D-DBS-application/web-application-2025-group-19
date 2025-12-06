@@ -90,10 +90,33 @@ class Region(db.Model):
     tenant_id = db.Column(db.Integer, primary_key=True)
     region_id = pk_id_column(is_composite_key_part=True)
     name      = db.Column(db.String(100), nullable=False)
+    # Geografische centrum coördinaten voor regio-algoritme
+    center_lat = db.Column(db.Float, nullable=True)  # Latitude van centrum
+    center_lng = db.Column(db.Float, nullable=True)  # Longitude van centrum
+    radius_km  = db.Column(db.Float, default=30.0)   # Straal in kilometers (standaard 30km)
     __table_args__ = (
         ForeignKeyConstraint(["tenant_id"], ["tenant.tenant_id"], ondelete="CASCADE"),
         UniqueConstraint("tenant_id", "name", name="uq_region_tenant_name"),
         Index("idx_region_tenant_id_name", "tenant_id", "name"),
+    )
+
+# --- region_address (adressen binnen een regio met hun coördinaten) ---
+class RegionAddress(db.Model):
+    __tablename__ = "region_address"
+    tenant_id   = db.Column(db.Integer, primary_key=True)
+    address_id  = pk_id_column(is_composite_key_part=True)
+    region_id   = db.Column(db.Integer, nullable=False)
+    scheduled_date = db.Column(db.Date, nullable=False)  # Datum van de levering
+    address     = db.Column(db.String(300), nullable=False)
+    latitude    = db.Column(db.Float, nullable=False)
+    longitude   = db.Column(db.Float, nullable=False)
+    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
+    __table_args__ = (
+        ForeignKeyConstraint(["tenant_id"], ["tenant.tenant_id"], ondelete="CASCADE"),
+        ForeignKeyConstraint(["tenant_id", "region_id"],
+                             ["region.tenant_id", "region.region_id"],
+                             ondelete="CASCADE"),
+        Index("idx_region_address_date", "tenant_id", "region_id", "scheduled_date"),
     )
 
 # --- location (PK: tenant_id, location_id) ---
@@ -519,5 +542,233 @@ def suggest_delivery_days(tenant_id: int, region_id: int, min_free_minutes: int 
             suggestions.append({"date": r.scheduled_date, "free_minutes": free})
     suggestions.sort(key=lambda x: x["free_minutes"], reverse=True)
     return suggestions
+
+
+# ========== GEOGRAFISCHE FUNCTIES VOOR REGIO-ALGORITME ==========
+
+import math
+
+def haversine_distance(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    """
+    Bereken de afstand tussen twee coördinaten in kilometers (Haversine formule).
+    """
+    R = 6371  # Radius van de aarde in km
+    
+    lat1_rad = math.radians(lat1)
+    lat2_rad = math.radians(lat2)
+    delta_lat = math.radians(lat2 - lat1)
+    delta_lng = math.radians(lng2 - lng1)
+    
+    a = math.sin(delta_lat / 2) ** 2 + \
+        math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(delta_lng / 2) ** 2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    
+    return R * c
+
+
+def calculate_centroid(coordinates: list) -> tuple:
+    """
+    Bereken het geometrisch gemiddelde (centroid) van een lijst coördinaten.
+    coordinates: lijst van (lat, lng) tuples
+    Returns: (center_lat, center_lng)
+    """
+    if not coordinates:
+        return None, None
+    
+    total_lat = sum(coord[0] for coord in coordinates)
+    total_lng = sum(coord[1] for coord in coordinates)
+    n = len(coordinates)
+    
+    return total_lat / n, total_lng / n
+
+
+def get_next_address_id(tenant_id: int) -> int:
+    """Get the next available address_id for a tenant."""
+    max_id = db.session.query(db.func.max(RegionAddress.address_id)).filter(
+        RegionAddress.tenant_id == tenant_id
+    ).scalar()
+    return (max_id or 0) + 1
+
+
+def find_matching_regions(tenant_id: int, lat: float, lng: float, max_distance_km: float = 30.0):
+    """
+    Vind alle regio's waar het gegeven coördinaat binnen de straal valt.
+    Returns: lijst van Region objecten met hun afstand tot het punt.
+    """
+    regions = Region.query.filter(
+        Region.tenant_id == tenant_id,
+        Region.center_lat.isnot(None),
+        Region.center_lng.isnot(None)
+    ).all()
+    
+    matching = []
+    for region in regions:
+        distance = haversine_distance(lat, lng, region.center_lat, region.center_lng)
+        if distance <= (region.radius_km or max_distance_km):
+            matching.append({
+                "region": region,
+                "distance_km": round(distance, 2)
+            })
+    
+    # Sorteer op afstand (dichtsbij eerst)
+    matching.sort(key=lambda x: x["distance_km"])
+    return matching
+
+
+def count_deliveries_for_region_date(tenant_id: int, region_id: int, scheduled_date: date) -> int:
+    """
+    Tel het aantal leveringen voor een specifieke regio op een specifieke datum.
+    """
+    count = RegionAddress.query.filter(
+        RegionAddress.tenant_id == tenant_id,
+        RegionAddress.region_id == region_id,
+        RegionAddress.scheduled_date == scheduled_date
+    ).count()
+    return count
+
+
+def get_available_dates_for_region(tenant_id: int, region_id: int, max_deliveries: int = 13, days_ahead: int = 30):
+    """
+    Krijg beschikbare datums voor een regio (datums met minder dan max_deliveries).
+    """
+    from datetime import timedelta
+    today = date.today()
+    available_dates = []
+    
+    for i in range(days_ahead):
+        check_date = today + timedelta(days=i)
+        delivery_count = count_deliveries_for_region_date(tenant_id, region_id, check_date)
+        
+        if delivery_count < max_deliveries:
+            available_dates.append({
+                "date": check_date,
+                "delivery_count": delivery_count,
+                "spots_left": max_deliveries - delivery_count
+            })
+    
+    return available_dates
+
+
+def add_address_to_region(tenant_id: int, region_id: int, address: str, lat: float, lng: float, scheduled_date: date):
+    """
+    Voeg een adres toe aan een regio en herbereken het centrum.
+    """
+    # Voeg adres toe
+    address_id = get_next_address_id(tenant_id)
+    new_address = RegionAddress(
+        tenant_id=tenant_id,
+        address_id=address_id,
+        region_id=region_id,
+        scheduled_date=scheduled_date,
+        address=address,
+        latitude=lat,
+        longitude=lng
+    )
+    db.session.add(new_address)
+    
+    # Haal alle adressen van deze regio op om het nieuwe centrum te berekenen
+    all_addresses = RegionAddress.query.filter(
+        RegionAddress.tenant_id == tenant_id,
+        RegionAddress.region_id == region_id
+    ).all()
+    
+    # Voeg het nieuwe adres toe aan de lijst voor berekening
+    coordinates = [(addr.latitude, addr.longitude) for addr in all_addresses]
+    coordinates.append((lat, lng))
+    
+    # Bereken nieuw centrum
+    new_center_lat, new_center_lng = calculate_centroid(coordinates)
+    
+    # Update regio centrum
+    region = Region.query.filter_by(tenant_id=tenant_id, region_id=region_id).first()
+    if region:
+        region.center_lat = new_center_lat
+        region.center_lng = new_center_lng
+    
+    db.session.commit()
+    return address_id
+
+
+def create_new_region_with_address(tenant_id: int, region_name: str, address: str, lat: float, lng: float, scheduled_date: date):
+    """
+    Maak een nieuwe regio aan met het adres als centrum.
+    """
+    # Maak nieuwe regio
+    region_id = get_next_region_id(tenant_id)
+    new_region = Region(
+        tenant_id=tenant_id,
+        region_id=region_id,
+        name=region_name,
+        center_lat=lat,
+        center_lng=lng,
+        radius_km=30.0
+    )
+    db.session.add(new_region)
+    db.session.flush()
+    
+    # Voeg adres toe aan de regio
+    address_id = get_next_address_id(tenant_id)
+    new_address = RegionAddress(
+        tenant_id=tenant_id,
+        address_id=address_id,
+        region_id=region_id,
+        scheduled_date=scheduled_date,
+        address=address,
+        latitude=lat,
+        longitude=lng
+    )
+    db.session.add(new_address)
+    db.session.commit()
+    
+    return region_id, address_id
+
+
+def get_suggested_dates_for_address(tenant_id: int, lat: float, lng: float, max_deliveries: int = 13, days_ahead: int = 30):
+    """
+    Geef datum suggesties voor een adres gebaseerd op bestaande regio's.
+    Alleen datums met < max_deliveries worden getoond.
+    """
+    from datetime import timedelta
+    
+    # Vind regio's binnen 30km
+    matching_regions = find_matching_regions(tenant_id, lat, lng)
+    
+    if not matching_regions:
+        return []
+    
+    suggestions = []
+    today = date.today()
+    
+    for match in matching_regions:
+        region = match["region"]
+        distance = match["distance_km"]
+        
+        # Check beschikbare datums voor deze regio
+        for i in range(days_ahead):
+            check_date = today + timedelta(days=i)
+            delivery_count = count_deliveries_for_region_date(tenant_id, region.region_id, check_date)
+            
+            if delivery_count < max_deliveries:
+                suggestions.append({
+                    "date": str(check_date),
+                    "region_id": region.region_id,
+                    "region_name": region.name,
+                    "distance_km": distance,
+                    "delivery_count": delivery_count,
+                    "spots_left": max_deliveries - delivery_count
+                })
+    
+    # Sorteer op datum en afstand
+    suggestions.sort(key=lambda x: (x["date"], x["distance_km"]))
+    
+    # Verwijder duplicaten (alleen eerste regio per datum behouden)
+    seen_dates = set()
+    unique_suggestions = []
+    for s in suggestions:
+        if s["date"] not in seen_dates:
+            seen_dates.add(s["date"])
+            unique_suggestions.append(s)
+    
+    return unique_suggestions
 
 

@@ -37,4 +37,10 @@ class Config:
     SQLALCHEMY_DATABASE_URI = DATABASE_URI
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     TENANT_ID = int(os.getenv("TENANT_ID", "1"))
+    
+    # Mapbox API configuratie
+    MAPBOX_ACCESS_TOKEN = os.getenv(
+        "MAPBOX_ACCESS_TOKEN", 
+        "pk.eyJ1IjoibWljaGFlbG5vdGVtYW4iLCJhIjoiY200bWdrYm9xMTBjNDJtczl2OHo1NjJ0OCJ9.UWLYzGIxyJN5fzq2sLOIhg"
+    )
 

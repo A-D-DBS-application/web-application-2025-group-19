@@ -1,14 +1,27 @@
 
 # app/routes.py
+import os
+import requests
 from datetime import date, timedelta, datetime
 from decimal import Decimal
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash, current_app, jsonify
 from .models import (
     db, Tenant, Region, Location, Employee, Availability, Customer, Product,
-    CustomerOrder, OrderItem, DeliveryRun, Delivery,
+    CustomerOrder, OrderItem, DeliveryRun, Delivery, RegionAddress,
     EmployeeRole, RunStatus, set_employee_availability, get_available_drivers, add_order,
-    upsert_run_and_attach_delivery_with_capacity, get_delivery_overview, suggest_delivery_days
+    upsert_run_and_attach_delivery_with_capacity, get_delivery_overview, suggest_delivery_days,
+    find_matching_regions, get_suggested_dates_for_address, add_address_to_region,
+    create_new_region_with_address, count_deliveries_for_region_date, haversine_distance
 )
+
+# Mapbox API configuratie - wordt uit config geladen
+def get_mapbox_token():
+    """Haal Mapbox token uit Flask config of environment."""
+    from flask import current_app
+    return current_app.config.get("MAPBOX_ACCESS_TOKEN") or os.getenv(
+        "MAPBOX_ACCESS_TOKEN", 
+        "pk.eyJ1IjoibWljaGFlbG5vdGVtYW4iLCJhIjoiY200bWdrYm9xMTBjNDJtczl2OHo1NjJ0OCJ9.UWLYzGIxyJN5fzq2sLOIhg"
+    )
 
 main = Blueprint("main", __name__)
 
@@ -483,28 +496,102 @@ def schedule():
     tid = tenant_id()
     order_id = request.form.get("order_id")
     address = request.form.get("address")
-    region_name = request.form.get("region_id")  # Now it's a municipality name
+    region_name = request.form.get("region_id")  # Municipality name (optional)
     scheduled_date_str = request.form.get("scheduled_date")
+    
+    # Coördinaten uit hidden fields (gezet door frontend via Mapbox)
+    lat_str = request.form.get("lat", "")
+    lng_str = request.form.get("lng", "")
+    selected_region_id = request.form.get("selected_region_id", "")
 
     try:
         order_id = int(order_id)
         scheduled_date = date.fromisoformat(scheduled_date_str)
     except Exception:
         flash("Ongeldige invoer.", "error")
-        return redirect(url_for("main.index"))
+        return redirect(url_for("main.add_listing"))
 
-    # Find region by municipality name
+    # Parse coördinaten
+    lat = None
+    lng = None
+    try:
+        if lat_str and lng_str:
+            lat = float(lat_str)
+            lng = float(lng_str)
+    except (ValueError, TypeError):
+        pass
+
     region_id = None
-    if region_name:
+    
+    # ========== NIEUW REGIO-ALGORITME ==========
+    if lat and lng:
+        # Scenario 1: Check of er een bestaande regio is geselecteerd
+        if selected_region_id:
+            try:
+                region_id = int(selected_region_id)
+                region = Region.query.filter_by(tenant_id=tid, region_id=region_id).first()
+                
+                if region:
+                    # Check capaciteit (max 13 leveringen)
+                    delivery_count = count_deliveries_for_region_date(tid, region_id, scheduled_date)
+                    if delivery_count >= 13:
+                        flash(f"Deze regio heeft al 13 leveringen op {scheduled_date.strftime('%d-%m-%Y')}. Kies een andere datum.", "error")
+                        return redirect(url_for("main.add_listing"))
+                    
+                    # Voeg adres toe aan regio en herbereken centrum
+                    add_address_to_region(tid, region_id, address, lat, lng, scheduled_date)
+                    current_app.logger.info(f"Added address to existing region {region_id}")
+            except (ValueError, TypeError):
+                pass
+        
+        # Scenario 2: Geen bestaande regio geselecteerd, check of adres in een regio past
+        if not region_id:
+            matching_regions = find_matching_regions(tid, lat, lng, max_distance_km=30.0)
+            
+            if matching_regions:
+                # Gebruik de dichtstbijzijnde regio
+                closest_region = matching_regions[0]["region"]
+                region_id = closest_region.region_id
+                
+                # Check capaciteit
+                delivery_count = count_deliveries_for_region_date(tid, region_id, scheduled_date)
+                if delivery_count >= 13:
+                    # Probeer de volgende dichtstbijzijnde regio
+                    found_available = False
+                    for match in matching_regions[1:]:
+                        r = match["region"]
+                        count = count_deliveries_for_region_date(tid, r.region_id, scheduled_date)
+                        if count < 13:
+                            region_id = r.region_id
+                            found_available = True
+                            break
+                    
+                    if not found_available:
+                        # Alle regio's vol, maak nieuwe regio
+                        region_name_new = region_name or f"Regio {scheduled_date.strftime('%d-%m-%Y')}"
+                        region_id, _ = create_new_region_with_address(tid, region_name_new, address, lat, lng, scheduled_date)
+                        current_app.logger.info(f"Created new region {region_id} (all nearby regions full)")
+                else:
+                    # Voeg adres toe aan bestaande regio
+                    add_address_to_region(tid, region_id, address, lat, lng, scheduled_date)
+                    current_app.logger.info(f"Added address to nearest region {region_id}")
+            else:
+                # Geen bestaande regio binnen 30km, maak nieuwe regio
+                region_name_new = region_name or f"Regio {scheduled_date.strftime('%d-%m-%Y')}"
+                region_id, _ = create_new_region_with_address(tid, region_name_new, address, lat, lng, scheduled_date)
+                current_app.logger.info(f"Created new region {region_id} (no nearby regions)")
+    
+    # Fallback: oude logica als geen coördinaten beschikbaar
+    if not region_id and region_name:
         region = Region.query.filter_by(tenant_id=tid, name=region_name).first()
         if region:
             region_id = region.region_id
         else:
-            # Create new region with just name and tenant_id
-            region = Region(tenant_id=tid, name=region_name)
+            from .models import get_next_region_id
+            region_id = get_next_region_id(tid)
+            region = Region(tenant_id=tid, region_id=region_id, name=region_name)
             db.session.add(region)
             db.session.flush()
-            region_id = region.region_id
 
     # Kies een beschikbare driver (indien region_id gegeven)
     driver_id = None
@@ -523,17 +610,20 @@ def schedule():
             # create demo customer/location if needed
             customer = Customer.query.filter_by(tenant_id=tid, email="demo@customer.local").first()
             if not customer:
-                customer = Customer(tenant_id=tid, name="Demo Customer", municipality="DemoTown", email="demo@customer.local")
+                from .models import get_next_customer_id
+                customer_id = get_next_customer_id(tid)
+                customer = Customer(tenant_id=tid, customer_id=customer_id, name="Demo Customer", municipality="DemoTown", email="demo@customer.local")
                 db.session.add(customer); db.session.flush()
 
             # Use address from form if provided for the initial demo location, otherwise use default.
-            # IMPORTANT: Do NOT mutate this location after creation, otherwise older demo orders
-            # would appear to move to the latest region/address.
             location_address = address if address else "Demo Street 1"
             loc = Location.query.filter_by(tenant_id=tid, name="Demo Store").first()
             if not loc:
+                from .models import get_next_location_id
+                location_id = get_next_location_id(tid)
                 loc = Location(
                     tenant_id=tid,
+                    location_id=location_id,
                     name="Demo Store",
                     address=location_address,
                     region_id=region_id,
@@ -548,7 +638,7 @@ def schedule():
         except Exception:
             current_app.logger.exception("Failed to create demo order for schedule request")
             flash("Kon geen order aanmaken voor deze levering.", "error")
-            return redirect(url_for("main.index"))
+            return redirect(url_for("main.add_listing"))
 
     try:
         delivery_id = upsert_run_and_attach_delivery_with_capacity(
@@ -575,7 +665,7 @@ def schedule():
         short_msg = str(e) if str(e) else "Interne serverfout"
         flash(f"Onbekende fout bij plannen van levering: {short_msg}", "error")
     
-    return redirect(url_for("main.index"))
+    return redirect(url_for("main.add_listing"))
 
 
 # --- API endpoints voor beschikbaarheid en suggesties ---
@@ -720,6 +810,124 @@ def suggest_dates():
     ]
     
     return jsonify({"suggestions": suggestions})
+
+
+# ========== NIEUWE API ENDPOINTS VOOR REGIO-ALGORITME ==========
+
+@main.route("/api/geocode", methods=["GET"])
+def geocode_address():
+    """
+    Geocode een adres via Mapbox API.
+    Returns: { lat, lng, formatted_address }
+    """
+    if "employee_id" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    
+    address = request.args.get("address", "").strip()
+    if not address:
+        return jsonify({"error": "Address is required"}), 400
+    
+    try:
+        # Mapbox Geocoding API aanroepen
+        mapbox_token = get_mapbox_token()
+        url = f"https://api.mapbox.com/geocoding/v5/mapbox.places/{requests.utils.quote(address)}.json"
+        params = {
+            "access_token": mapbox_token,
+            "limit": 1,
+            "country": "BE,NL,LU,DE,FR",  # Focus op Benelux en omgeving
+            "language": "nl"
+        }
+        
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        
+        if not data.get("features"):
+            return jsonify({"error": "Address not found"}), 404
+        
+        feature = data["features"][0]
+        lng, lat = feature["center"]  # Mapbox returns [lng, lat]
+        
+        return jsonify({
+            "lat": lat,
+            "lng": lng,
+            "formatted_address": feature.get("place_name", address)
+        })
+        
+    except requests.RequestException as e:
+        current_app.logger.error(f"Mapbox geocoding error: {e}")
+        return jsonify({"error": "Geocoding service unavailable"}), 503
+    except Exception as e:
+        current_app.logger.error(f"Geocoding error: {e}")
+        return jsonify({"error": "Internal error"}), 500
+
+
+@main.route("/api/suggest-dates-by-location", methods=["GET"])
+def suggest_dates_by_location():
+    """
+    Geef datum suggesties gebaseerd op coördinaten van een adres.
+    - Vindt regio's binnen 30km
+    - Toont alleen datums met < 13 leveringen
+    """
+    if "employee_id" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    
+    try:
+        lat = float(request.args.get("lat", 0))
+        lng = float(request.args.get("lng", 0))
+    except (ValueError, TypeError):
+        return jsonify({"error": "Invalid coordinates"}), 400
+    
+    if lat == 0 or lng == 0:
+        return jsonify({"error": "Coordinates required"}), 400
+    
+    tid = tenant_id()
+    max_deliveries = 13  # Maximum leveringen per dag per regio
+    
+    try:
+        # Gebruik het nieuwe algoritme om suggesties te krijgen
+        suggestions = get_suggested_dates_for_address(tid, lat, lng, max_deliveries, days_ahead=30)
+        
+        return jsonify({
+            "suggestions": suggestions,
+            "has_matching_regions": len(suggestions) > 0
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting date suggestions: {e}")
+        import traceback
+        current_app.logger.error(traceback.format_exc())
+        return jsonify({"error": "Internal error"}), 500
+
+
+@main.route("/api/check-region-capacity", methods=["GET"])
+def check_region_capacity():
+    """
+    Check de capaciteit van een regio voor een specifieke datum.
+    """
+    if "employee_id" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    
+    try:
+        region_id = int(request.args.get("region_id", 0))
+        date_str = request.args.get("date", "")
+        check_date = date.fromisoformat(date_str)
+    except (ValueError, TypeError):
+        return jsonify({"error": "Invalid parameters"}), 400
+    
+    tid = tenant_id()
+    max_deliveries = 13
+    
+    delivery_count = count_deliveries_for_region_date(tid, region_id, check_date)
+    
+    return jsonify({
+        "region_id": region_id,
+        "date": date_str,
+        "delivery_count": delivery_count,
+        "max_deliveries": max_deliveries,
+        "spots_left": max_deliveries - delivery_count,
+        "is_available": delivery_count < max_deliveries
+    })
 
 
 # --- Truck Management ---
