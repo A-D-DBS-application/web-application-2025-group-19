@@ -762,10 +762,136 @@ def create_new_region_with_address(tenant_id: int, region_name: str, address: st
     return region_id, address_id
 
 
+# ========== CAPACITEITS FUNCTIES ==========
+
+def count_available_drivers_for_date(tenant_id: int, check_date: date) -> int:
+    """
+    Tel het aantal beschikbare chauffeurs voor een specifieke datum.
+    Een chauffeur is beschikbaar als:
+    - role = driver
+    - active = True
+    - Er een Availability record bestaat voor die datum met active = True
+    """
+    count = db.session.query(db.func.count(Employee.employee_id)).join(
+        Availability,
+        (Employee.tenant_id == Availability.tenant_id) & 
+        (Employee.employee_id == Availability.employee_id)
+    ).filter(
+        Employee.tenant_id == tenant_id,
+        Employee.role == EmployeeRole.driver,
+        Employee.active.is_(True),
+        Availability.available_date == check_date,
+        Availability.active.is_(True)
+    ).scalar() or 0
+    
+    return count
+
+
+def count_available_trucks(tenant_id: int) -> int:
+    """
+    Tel het totaal aantal beschikbare (actieve) trucks.
+    """
+    count = db.session.query(db.func.count(Truck.truck_id)).filter(
+        Truck.tenant_id == tenant_id,
+        Truck.active.is_(True)
+    ).scalar() or 0
+    
+    return count
+
+
+def count_active_regions_for_date(tenant_id: int, check_date: date) -> int:
+    """
+    Tel het aantal unieke regio's met geplande leveringen op een specifieke datum.
+    Dit bepaalt hoeveel trucks er nodig zijn.
+    """
+    count = db.session.query(db.func.count(db.distinct(DeliveryRun.region_id))).filter(
+        DeliveryRun.tenant_id == tenant_id,
+        DeliveryRun.scheduled_date == check_date,
+        DeliveryRun.status.in_([RunStatus.planned, RunStatus.in_progress])
+    ).scalar() or 0
+    
+    return count
+
+
+def count_total_deliveries_for_date(tenant_id: int, check_date: date) -> int:
+    """
+    Tel het totaal aantal leveringen gepland op een specifieke datum.
+    Dit bepaalt hoeveel chauffeurs er nodig zijn.
+    """
+    count = db.session.query(db.func.count(Delivery.delivery_id)).join(
+        DeliveryRun,
+        (Delivery.tenant_id == DeliveryRun.tenant_id) & 
+        (Delivery.run_id == DeliveryRun.run_id)
+    ).filter(
+        DeliveryRun.tenant_id == tenant_id,
+        DeliveryRun.scheduled_date == check_date,
+        DeliveryRun.status.in_([RunStatus.planned, RunStatus.in_progress])
+    ).scalar() or 0
+    
+    return count
+
+
+def get_capacity_info_for_date(tenant_id: int, check_date: date) -> dict:
+    """
+    Haal alle capaciteitsinformatie op voor een specifieke datum.
+    
+    VEREENVOUDIGDE REGELS:
+    - Als er GEEN chauffeurs in het systeem zijn → geen beperking (algoritme werkt gewoon)
+    - Als er WEL chauffeurs zijn → minstens 1 chauffeur beschikbaar per dag
+    - Trucks: alleen checken als er trucks zijn, dan moeten actieve regio's ≤ trucks
+    """
+    available_drivers = count_available_drivers_for_date(tenant_id, check_date)
+    available_trucks = count_available_trucks(tenant_id)
+    active_regions = count_active_regions_for_date(tenant_id, check_date)
+    total_deliveries = count_total_deliveries_for_date(tenant_id, check_date)
+    
+    # Tel totaal aantal chauffeurs in het systeem (ongeacht beschikbaarheid)
+    total_drivers_in_system = db.session.query(db.func.count(Employee.employee_id)).filter(
+        Employee.tenant_id == tenant_id,
+        Employee.role == EmployeeRole.driver,
+        Employee.active.is_(True)
+    ).scalar() or 0
+    
+    is_valid = True
+    reasons = []
+    
+    # Regel 1: Chauffeurs check (alleen als er chauffeurs in het systeem zijn)
+    # Als er geen chauffeurs zijn → geen beperking
+    # Als er wel chauffeurs zijn → minstens 1 beschikbaar per dag
+    if total_drivers_in_system > 0 and available_drivers == 0:
+        is_valid = False
+        reasons.append("Geen chauffeurs beschikbaar op deze dag")
+    
+    # Regel 2: Trucks check (alleen als er trucks in het systeem zijn)
+    # Aantal actieve regio's (+1 voor nieuwe) mag niet groter zijn dan aantal trucks
+    if available_trucks > 0 and (active_regions + 1) > available_trucks:
+        is_valid = False
+        reasons.append(f"Trucks vol ({active_regions} regio's, {available_trucks} trucks)")
+    
+    # GEEN regel meer voor "leveringen ≤ chauffeurs"
+    
+    return {
+        "available_drivers": available_drivers,
+        "available_trucks": available_trucks,
+        "active_regions": active_regions,
+        "total_deliveries": total_deliveries,
+        "total_drivers_in_system": total_drivers_in_system,
+        "is_valid": is_valid,
+        "reason": "; ".join(reasons) if reasons else None,
+        "trucks_left": max(0, available_trucks - active_regions) if available_trucks > 0 else 999,
+        "drivers_left": available_drivers if total_drivers_in_system > 0 else 999
+    }
+
+
 def get_suggested_dates_for_address(tenant_id: int, lat: float, lng: float, max_deliveries: int = 13, days_ahead: int = 30):
     """
     Geef datum suggesties voor een adres gebaseerd op bestaande regio's.
-    Alleen datums met < max_deliveries worden getoond.
+    
+    UITGEBREID ALGORITME - Een datum is ENKEL geldig als:
+    1) Er minstens één chauffeur beschikbaar is op die dag
+    2) Het aantal regio's die dag NIET groter is dan het aantal beschikbare trucks
+    3) Het aantal leveringen die dag NIET groter is dan het aantal beschikbare chauffeurs
+    4) De regio nog < max_deliveries heeft
     """
     from datetime import timedelta
     
@@ -778,6 +904,9 @@ def get_suggested_dates_for_address(tenant_id: int, lat: float, lng: float, max_
     suggestions = []
     today = date.today()
     
+    # Cache capaciteitsinfo per datum om herhaalde queries te voorkomen
+    capacity_cache = {}
+    
     for match in matching_regions:
         region = match["region"]
         distance = match["distance_km"]
@@ -785,16 +914,34 @@ def get_suggested_dates_for_address(tenant_id: int, lat: float, lng: float, max_
         # Check beschikbare datums voor deze regio
         for i in range(days_ahead):
             check_date = today + timedelta(days=i)
+            date_str = str(check_date)
+            
+            # Haal capaciteitsinfo uit cache of bereken
+            if date_str not in capacity_cache:
+                capacity_cache[date_str] = get_capacity_info_for_date(tenant_id, check_date)
+            
+            capacity_info = capacity_cache[date_str]
+            
+            # Check capaciteitsregels
+            if not capacity_info["is_valid"]:
+                continue
+            
+            # Check regio-specifieke leveringslimiet
             delivery_count = count_deliveries_for_region_date(tenant_id, region.region_id, check_date)
             
             if delivery_count < max_deliveries:
                 suggestions.append({
-                    "date": str(check_date),
+                    "date": date_str,
                     "region_id": region.region_id,
                     "region_name": region.name,
                     "distance_km": distance,
                     "delivery_count": delivery_count,
-                    "spots_left": max_deliveries - delivery_count
+                    "spots_left": max_deliveries - delivery_count,
+                    # Extra capaciteitsinfo
+                    "available_drivers": capacity_info["available_drivers"],
+                    "available_trucks": capacity_info["available_trucks"],
+                    "drivers_left": capacity_info["drivers_left"],
+                    "trucks_left": capacity_info["trucks_left"]
                 })
     
     # Sorteer op datum en afstand

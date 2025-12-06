@@ -12,7 +12,8 @@ from .models import (
     upsert_run_and_attach_delivery_with_capacity, get_delivery_overview, suggest_delivery_days,
     find_matching_regions, get_suggested_dates_for_address, add_address_to_region,
     create_new_region_with_address, count_deliveries_for_region_date, haversine_distance,
-    get_next_truck_id
+    get_next_truck_id, get_capacity_info_for_date, count_available_drivers_for_date,
+    count_available_trucks, count_active_regions_for_date
 )
 
 # Mapbox API configuratie - wordt uit config geladen
@@ -928,6 +929,36 @@ def check_region_capacity():
         "max_deliveries": max_deliveries,
         "spots_left": max_deliveries - delivery_count,
         "is_available": delivery_count < max_deliveries
+    })
+
+
+@main.route("/api/check-daily-capacity", methods=["GET"])
+def check_daily_capacity():
+    """
+    Check de totale capaciteit (chauffeurs + trucks) voor een specifieke datum.
+    Retourneert:
+    - available_drivers: beschikbare chauffeurs
+    - available_trucks: totaal trucks
+    - active_regions: regio's met leveringen
+    - total_deliveries: totaal leveringen
+    - is_valid: of er nog capaciteit is
+    - reason: reden indien niet beschikbaar
+    """
+    if "employee_id" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    
+    try:
+        date_str = request.args.get("date", "")
+        check_date = date.fromisoformat(date_str)
+    except (ValueError, TypeError):
+        return jsonify({"error": "Invalid date parameter"}), 400
+    
+    tid = tenant_id()
+    capacity_info = get_capacity_info_for_date(tid, check_date)
+    
+    return jsonify({
+        "date": date_str,
+        **capacity_info
     })
 
 
