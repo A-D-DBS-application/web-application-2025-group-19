@@ -496,12 +496,29 @@ def add_driver():
         return redirect(url_for("main.drivers"))
 
     tid = tenant_id()
-    # Prevent duplicates by email
-    if Employee.query.filter_by(tenant_id=tid, email=email).first():
-        flash("E-mailadres bestaat al voor een medewerker.", "error")
-        return redirect(url_for("main.drivers"))
-
-    try:
+    current_employee_id = session.get("employee_id")
+    
+    # Check if email already exists
+    existing_emp = Employee.query.filter_by(tenant_id=tid, email=email).first()
+    
+    if existing_emp:
+        # Check if it's the same person (current logged-in user)
+        if existing_emp.employee_id == current_employee_id:
+            # Same person: use existing employee, update info if needed, and add availability
+            emp = existing_emp
+            # Update name if provided (user might want to correct it)
+            if first and first != emp.first_name:
+                emp.first_name = first
+            if last and last != emp.last_name:
+                emp.last_name = last
+            # Update role to driver so they can be used as a driver
+            emp.role = EmployeeRole.driver
+        else:
+            # Different person with same email: prevent duplicate
+            flash("E-mailadres bestaat al voor een andere medewerker.", "error")
+            return redirect(url_for("main.drivers"))
+    else:
+        # Email doesn't exist: create new employee
         next_emp_id = get_next_employee_id(tid)
         emp = Employee(
             tenant_id=tid, employee_id=next_emp_id, first_name=first, last_name=last, email=email,
@@ -509,6 +526,8 @@ def add_driver():
         )
         db.session.add(emp)
         db.session.flush()  # Get the id before commit
+
+    try:
         
         # Parse availability dates (comma-separated)
         availability_dates = []
