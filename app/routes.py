@@ -1172,3 +1172,188 @@ def add_truck():
         flash("Fout bij het toevoegen van truck.", "error")
     
     return redirect(url_for("main.trucks_list"))
+
+
+# ========== iCAL EXPORT ENDPOINTS ==========
+
+@main.route("/export/deliveries.ics", methods=["GET"])
+def export_deliveries_ical():
+    """
+    Exporteer alle geplande leveringen als iCal bestand.
+    Kan gefilterd worden op datum range.
+    """
+    from .utils.ical import create_delivery_ical
+    from flask import Response
+    
+    if "employee_id" not in session:
+        return redirect(url_for("main.login"))
+    
+    tid = tenant_id()
+    
+    # Optionele filters
+    start_date_str = request.args.get("start")
+    end_date_str = request.args.get("end")
+    
+    try:
+        # Haal leveringen op
+        query = db.session.query(
+            Delivery.delivery_id,
+            Delivery.delivery_status,
+            CustomerOrder.order_id,
+            Region.name.label('region_name'),
+            DeliveryRun.scheduled_date,
+            Location.address
+        ).outerjoin(
+            DeliveryRun,
+            (Delivery.tenant_id == DeliveryRun.tenant_id) & (Delivery.run_id == DeliveryRun.run_id)
+        ).outerjoin(
+            Region,
+            (DeliveryRun.tenant_id == Region.tenant_id) & (DeliveryRun.region_id == Region.region_id)
+        ).outerjoin(
+            CustomerOrder,
+            (Delivery.tenant_id == CustomerOrder.tenant_id) & (Delivery.order_id == CustomerOrder.order_id)
+        ).outerjoin(
+            Location,
+            (CustomerOrder.tenant_id == Location.tenant_id) & (CustomerOrder.location_id == Location.location_id)
+        ).filter(
+            Delivery.tenant_id == tid
+        )
+        
+        # Filter op datum als opgegeven
+        if start_date_str:
+            try:
+                start_date = date.fromisoformat(start_date_str)
+                query = query.filter(DeliveryRun.scheduled_date >= start_date)
+            except ValueError:
+                pass
+        
+        if end_date_str:
+            try:
+                end_date = date.fromisoformat(end_date_str)
+                query = query.filter(DeliveryRun.scheduled_date <= end_date)
+            except ValueError:
+                pass
+        
+        rows = query.order_by(DeliveryRun.scheduled_date.asc()).all()
+        
+        deliveries = []
+        for row in rows:
+            deliveries.append({
+                "delivery_id": row.delivery_id,
+                "order_id": row.order_id,
+                "region_name": row.region_name or "Onbekend",
+                "scheduled_date": row.scheduled_date,
+                "address": row.address,
+                "status": row.delivery_status
+            })
+        
+        # Genereer iCal
+        ical_content = create_delivery_ical(deliveries, "Delivery Schedule - Leveringen")
+        
+        # Return als downloadbaar bestand
+        response = Response(ical_content, mimetype='text/calendar')
+        response.headers['Content-Disposition'] = 'attachment; filename=leveringen.ics'
+        return response
+        
+    except Exception as e:
+        current_app.logger.exception(f"Error exporting deliveries to iCal: {e}")
+        flash("Kon leveringen niet exporteren.", "error")
+        return redirect(url_for("main.listings"))
+
+
+@main.route("/export/driver/<int:employee_id>/schedule.ics", methods=["GET"])
+def export_driver_schedule_ical(employee_id):
+    """
+    Exporteer het leveringsschema van een specifieke chauffeur als iCal.
+    """
+    from .utils.ical import create_driver_schedule_ical
+    from flask import Response
+    
+    if "employee_id" not in session:
+        return redirect(url_for("main.login"))
+    
+    tid = tenant_id()
+    
+    try:
+        # Haal chauffeur info op
+        driver = Employee.query.filter_by(
+            tenant_id=tid, 
+            employee_id=employee_id,
+            role=EmployeeRole.driver
+        ).first()
+        
+        if not driver:
+            flash("Chauffeur niet gevonden.", "error")
+            return redirect(url_for("main.drivers_list"))
+        
+        driver_name = f"{driver.first_name} {driver.last_name}"
+        
+        # Haal leveringen op waar deze chauffeur aan gekoppeld is
+        rows = db.session.query(
+            Delivery.delivery_id,
+            CustomerOrder.order_id,
+            Region.name.label('region_name'),
+            DeliveryRun.scheduled_date,
+            Location.address
+        ).join(
+            DeliveryRun,
+            (Delivery.tenant_id == DeliveryRun.tenant_id) & (Delivery.run_id == DeliveryRun.run_id)
+        ).outerjoin(
+            Region,
+            (DeliveryRun.tenant_id == Region.tenant_id) & (DeliveryRun.region_id == Region.region_id)
+        ).outerjoin(
+            CustomerOrder,
+            (Delivery.tenant_id == CustomerOrder.tenant_id) & (Delivery.order_id == CustomerOrder.order_id)
+        ).outerjoin(
+            Location,
+            (CustomerOrder.tenant_id == Location.tenant_id) & (CustomerOrder.location_id == Location.location_id)
+        ).filter(
+            DeliveryRun.tenant_id == tid,
+            DeliveryRun.driver_id == employee_id,
+            DeliveryRun.scheduled_date >= date.today()
+        ).order_by(DeliveryRun.scheduled_date.asc()).all()
+        
+        deliveries = []
+        for row in rows:
+            deliveries.append({
+                "delivery_id": row.delivery_id,
+                "order_id": row.order_id,
+                "region_name": row.region_name or "Onbekend",
+                "scheduled_date": row.scheduled_date,
+                "address": row.address
+            })
+        
+        # Haal beschikbaarheidsdagen op
+        avail_rows = Availability.query.filter(
+            Availability.tenant_id == tid,
+            Availability.employee_id == employee_id,
+            Availability.available_date >= date.today(),
+            Availability.active.is_(True)
+        ).order_by(Availability.available_date.asc()).all()
+        
+        availability_dates = [a.available_date for a in avail_rows]
+        
+        # Genereer iCal
+        ical_content = create_driver_schedule_ical(driver_name, deliveries, availability_dates)
+        
+        # Return als downloadbaar bestand
+        filename = f"leveringen-{driver.first_name.lower()}-{driver.last_name.lower()}.ics"
+        response = Response(ical_content, mimetype='text/calendar')
+        response.headers['Content-Disposition'] = f'attachment; filename={filename}'
+        return response
+        
+    except Exception as e:
+        current_app.logger.exception(f"Error exporting driver schedule to iCal: {e}")
+        flash("Kon schema niet exporteren.", "error")
+        return redirect(url_for("main.drivers_list"))
+
+
+@main.route("/export/my-schedule.ics", methods=["GET"])
+def export_my_schedule_ical():
+    """
+    Exporteer het schema van de ingelogde gebruiker (als chauffeur).
+    """
+    if "employee_id" not in session:
+        return redirect(url_for("main.login"))
+    
+    return redirect(url_for("main.export_driver_schedule_ical", employee_id=session["employee_id"]))
