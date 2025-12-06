@@ -728,12 +728,7 @@ textarea.form-input {
 }
 
 .auth-page .navbar-brand {
-  color: var(--color-white);
-}
-
-.auth-page .navbar-brand-icon {
-  background: rgba(255, 255, 255, 0.15);
-  color: var(--color-white);
+  display: none;
 }
 
 .auth-page .btn-ghost {
