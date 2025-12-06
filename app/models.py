@@ -348,8 +348,9 @@ def set_employee_availability(tenant_id: int, employee_id: int, available_date: 
     if av:
         av.active = active
     else:
+        availability_id = get_next_availability_id(tenant_id)
         av = Availability(
-            tenant_id=tenant_id, employee_id=employee_id,
+            tenant_id=tenant_id, availability_id=availability_id, employee_id=employee_id,
             available_date=available_date, active=active
         )
         db.session.add(av)

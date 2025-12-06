@@ -12,7 +12,7 @@ from .models import (
     upsert_run_and_attach_delivery_with_capacity, get_delivery_overview, suggest_delivery_days,
     find_matching_regions, get_suggested_dates_for_address, add_address_to_region,
     create_new_region_with_address, count_deliveries_for_region_date, haversine_distance,
-    get_next_truck_id, get_capacity_info_for_date, count_available_drivers_for_date,
+    get_next_truck_id, get_next_employee_id, get_capacity_info_for_date, count_available_drivers_for_date,
     count_available_trucks, count_active_regions_for_date
 )
 
@@ -304,6 +304,22 @@ def drivers():
             Employee.role == EmployeeRole.driver,
             Employee.active.is_(True)
         ).order_by(Employee.last_name.asc()).all()
+        
+        # Add availability information to each driver
+        today = date.today()
+        for driver in drivers_list:
+            # Get the most recent availability
+            availability = Availability.query.filter_by(
+                tenant_id=tid,
+                employee_id=driver.employee_id,
+                active=True
+            ).order_by(Availability.available_date.desc()).first()
+            
+            # Add computed attributes for template
+            driver.name = f"{driver.first_name} {driver.last_name}"
+            driver.available_today = availability and availability.available_date == today
+            driver.available_date = availability.available_date.strftime('%d-%m-%Y') if availability else None
+            
     except Exception as e:
         current_app.logger.exception(f"Failed to query drivers for drivers overview: {e}")
         drivers_list = []
@@ -510,7 +526,7 @@ def add_driver():
             current_app.logger.exception(f"Failed to set availability for new driver: {e}")
             # Still commit the driver even if availability fails
             db.session.commit()
-            flash(f"Chauffeur {first} {last} toegevoegd, maar beschikbaarheid kon niet worden ingesteld.", "warning")
+            flash(f"Chauffeur {first} {last} toegevoegd, maar beschikbaarheid kon niet worden ingesteld: {str(e)}", "warning")
             return redirect(url_for("main.index"))
         
         db.session.commit()
@@ -518,7 +534,12 @@ def add_driver():
     except Exception as e:
         db.session.rollback()
         current_app.logger.exception(f"Error adding driver: {e}")
-        flash("Fout bij het toevoegen van chauffeur.", "error")
+        error_msg = str(e)
+        # Show more detailed error message to help debug
+        if "NOT NULL" in error_msg or "constraint" in error_msg.lower():
+            flash(f"Fout bij het toevoegen van chauffeur: Database constraint error. Details: {error_msg[:100]}", "error")
+        else:
+            flash(f"Fout bij het toevoegen van chauffeur: {error_msg[:150]}", "error")
     
     return redirect(url_for("main.index"))
 
