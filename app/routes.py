@@ -146,6 +146,8 @@ def index():
             Delivery.delivery_id, 
             CustomerOrder.order_id,
             Region.name,
+            DeliveryRun.scheduled_date,
+            RegionAddress.address,
             Delivery.delivery_status
         ).outerjoin(
             DeliveryRun,
@@ -156,21 +158,64 @@ def index():
         ).outerjoin(
             CustomerOrder,
             (Delivery.tenant_id == CustomerOrder.tenant_id) & (Delivery.order_id == CustomerOrder.order_id)
+        ).outerjoin(
+            RegionAddress,
+            (DeliveryRun.tenant_id == RegionAddress.tenant_id) & 
+            (DeliveryRun.region_id == RegionAddress.region_id) &
+            (DeliveryRun.scheduled_date == RegionAddress.scheduled_date)
         ).filter(
             Delivery.tenant_id == tid,
-            Delivery.delivery_status == 'scheduled'
-        ).order_by(DeliveryRun.scheduled_date.asc()).limit(12).all()
+            Delivery.delivery_status == 'scheduled',
+            DeliveryRun.scheduled_date >= date.today()  # Only future deliveries
+        ).order_by(DeliveryRun.scheduled_date.asc()).limit(50).all()  # Get more to filter unique
         
         # Convert to dict format for template
-        upcoming_deliveries = [
-            {
-                "delivery_id": d_id,
-                "order_id": o_id,
-                "municipality": region_name or 'N/A',
-                "delivery_status": str(status).split('.')[-1] if status else 'unknown'
-            }
-            for d_id, o_id, region_name, status in upcoming_deliveries
-        ]
+        # Extract municipality from address (e.g., "Legeweg 12, 8340 Damme, West-Vlaanderen, België" -> "Damme")
+        def extract_municipality(address_str):
+            if not address_str:
+                return 'N/A'
+            # Try to extract municipality from address string
+            # Format is usually: "Street, PostalCode Municipality, Province, Country"
+            parts = address_str.split(',')
+            if len(parts) >= 2:
+                # Get the part with postal code and municipality (usually second part)
+                # Format: "8340 Damme" -> extract "Damme"
+                municipality_part = parts[1].strip() if len(parts) > 1 else parts[-1].strip()
+                # Split by space and get the last word (municipality, skipping postal code)
+                words = municipality_part.split()
+                if len(words) >= 2:
+                    # Skip postal code, get municipality
+                    return words[-1]
+                elif len(words) == 1:
+                    return words[0]
+            return address_str.split(',')[-1].strip() if ',' in address_str else address_str
+        
+        today = date.today()
+        seen_combinations = set()
+        unique_deliveries = []
+        
+        for d_id, o_id, region_name, sched_date, address, status in upcoming_deliveries:
+            # Only show future deliveries
+            if sched_date and sched_date < today:
+                continue
+                
+            municipality = extract_municipality(address) if address else (region_name or 'N/A')
+            
+            # Create unique key: municipality + date
+            unique_key = (municipality, sched_date)
+            
+            # Only add if we haven't seen this combination before
+            if unique_key not in seen_combinations:
+                seen_combinations.add(unique_key)
+                unique_deliveries.append({
+                    "delivery_id": d_id,
+                    "order_id": o_id,
+                    "municipality": municipality,
+                    "scheduled_date": sched_date,
+                    "delivery_status": str(status).split('.')[-1] if status else 'unknown'
+                })
+        
+        upcoming_deliveries = unique_deliveries
     except Exception as e:
         current_app.logger.error(f"Upcoming deliveries query failed: {e}")
         import traceback
@@ -609,13 +654,26 @@ def schedule():
 
     if not existing_order:
         try:
+            # Ensure we have a valid region_id before creating location
+            if region_id is None:
+                # Create a default region if none exists
+                from .models import get_next_region_id
+                default_region = Region.query.filter_by(tenant_id=tid, name="Default").first()
+                if not default_region:
+                    region_id_new = get_next_region_id(tid)
+                    default_region = Region(tenant_id=tid, region_id=region_id_new, name="Default", radius_km=30.0)
+                    db.session.add(default_region)
+                    db.session.flush()
+                region_id = default_region.region_id
+            
             # create demo customer/location if needed
             customer = Customer.query.filter_by(tenant_id=tid, email="demo@customer.local").first()
             if not customer:
                 from .models import get_next_customer_id
                 customer_id = get_next_customer_id(tid)
                 customer = Customer(tenant_id=tid, customer_id=customer_id, name="Demo Customer", municipality="DemoTown", email="demo@customer.local")
-                db.session.add(customer); db.session.flush()
+                db.session.add(customer)
+                db.session.flush()
 
             # Use address from form if provided for the initial demo location, otherwise use default.
             location_address = address if address else "Demo Street 1"
@@ -637,9 +695,9 @@ def schedule():
             new_order_id = add_order(tenant_id=tid, customer_id=customer.customer_id, location_id=loc.location_id, seller_id=session["employee_id"], product_name=f"Imported {order_id}")
             order_id = int(new_order_id)
             current_app.logger.info(f"Created demo order {order_id} for scheduling (input product id).")
-        except Exception:
-            current_app.logger.exception("Failed to create demo order for schedule request")
-            flash("Kon geen order aanmaken voor deze levering.", "error")
+        except Exception as e:
+            current_app.logger.exception(f"Failed to create demo order for schedule request: {e}")
+            flash(f"Kon geen order aanmaken voor deze levering: {str(e)}", "error")
             return redirect(url_for("main.add_listing"))
 
     try:

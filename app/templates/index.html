@@ -44,7 +44,7 @@
           <thead>
             <tr>
               <th>Gemeente</th>
-              <th>Order ID</th>
+              <th>Datum</th>
               <th>Status</th>
             </tr>
           </thead>
@@ -52,7 +52,13 @@
             {% for delivery in upcoming_deliveries[:5] %}
               <tr>
                 <td class="font-medium">{{ delivery.municipality or 'N/A' }}</td>
-                <td>#{{ delivery.order_id }}</td>
+                <td>
+                  {% if delivery.scheduled_date %}
+                    {{ delivery.scheduled_date.strftime('%d-%m-%Y') }}
+                  {% else %}
+                    N/A
+                  {% endif %}
+                </td>
                 <td>
                   <span class="badge {% if delivery.delivery_status == 'scheduled' %}badge-primary{% elif delivery.delivery_status == 'delivered' %}badge-success{% else %}badge-default{% endif %}">
                     {{ delivery.delivery_status }}

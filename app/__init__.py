@@ -2,15 +2,41 @@
 # app/__init__.py
 from flask import Flask
 from flask_migrate import Migrate
+from sqlalchemy.exc import OperationalError
+from sqlalchemy import create_engine, text
 from .models import db, Tenant
 from .routes import main
 from .config import Config
+import os
+from pathlib import Path
 
 migrate = Migrate()
+
+def _test_db_connection(uri):
+    """Test if database connection works"""
+    try:
+        engine = create_engine(uri, connect_args={"connect_timeout": 3})
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return True
+    except Exception:
+        return False
 
 def create_app():
     app = Flask(__name__, template_folder="templates", static_folder="static")
     app.config.from_object(Config)
+
+    # Test database connection before initializing
+    db_uri = app.config.get("SQLALCHEMY_DATABASE_URI")
+    use_sqlite = os.getenv("USE_SQLITE", "0") == "1"
+    
+    # If not explicitly using SQLite, test the connection and fallback if needed
+    if not use_sqlite and db_uri and "postgresql" in db_uri:
+        if not _test_db_connection(db_uri):
+            app.logger.warning("PostgreSQL connection failed. Falling back to SQLite...")
+            db_path = Path(__file__).parent.parent / "dev.db"
+            app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
+            app.logger.info(f"Using SQLite database at: {db_path}")
 
     db.init_app(app)
     migrate.init_app(app, db)
@@ -53,7 +79,9 @@ def create_app():
                 app.config["TENANT_ID"] = t.tenant_id
             except Exception as e2:
                 app.logger.error(f"Failed to initialize database: {e2}")
-                raise
+                # Don't raise - allow app to start anyway
+                app.config["TENANT_ID"] = 1
+                app.logger.warning("App starting without database initialization. Some features may not work.")
 
         app.register_blueprint(main)
 

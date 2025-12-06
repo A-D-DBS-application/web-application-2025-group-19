@@ -252,6 +252,7 @@
   let geocodeTimeout = null;
   let calendarData = {}; // Stores delivery counts per date
   let selectedCalendarDate = null;
+  let selectedSuggestionIndex = null;
 
   document.addEventListener('DOMContentLoaded', function() {
     initAddressGeocoding();
@@ -276,6 +277,8 @@
     });
   }
 
+  let currentFormattedAddress = null;
+
   function geocodeAddress(address) {
     showGeocodeStatus('loading', 'Adres zoeken...');
     
@@ -285,25 +288,28 @@
         if (data.error) {
           showGeocodeStatus('error', data.error);
           hideSuggestions();
+          currentFormattedAddress = null;
           return;
         }
         
         currentLat = data.lat;
         currentLng = data.lng;
+        currentFormattedAddress = data.formatted_address;
         document.getElementById('lat-input').value = data.lat;
         document.getElementById('lng-input').value = data.lng;
         
-        showGeocodeStatus('success', 'Gevonden: ' + data.formatted_address);
+        showGeocodeStatus('success', 'Gevonden: ' + data.formatted_address, true);
         loadLocationSuggestions(data.lat, data.lng);
         loadCalendarData(); // Reload calendar with location-specific data
       })
       .catch(error => {
         showGeocodeStatus('error', 'Kon adres niet vinden');
         hideSuggestions();
+        currentFormattedAddress = null;
       });
   }
 
-  function showGeocodeStatus(type, message) {
+  function showGeocodeStatus(type, message, clickable = false) {
     const statusDiv = document.getElementById('geocode-status');
     const colors = {
       loading: { bg: 'rgba(65, 90, 119, 0.1)', color: 'var(--color-stone-blue)' },
@@ -317,6 +323,39 @@
     statusDiv.style.fontSize = '0.875rem';
     statusDiv.textContent = message;
     statusDiv.classList.remove('hidden');
+    
+    // Make clickable if it's a success status
+    if (clickable && type === 'success') {
+      statusDiv.style.cursor = 'pointer';
+      statusDiv.style.transition = 'all 0.2s ease';
+      statusDiv.title = 'Klik om dit adres te selecteren';
+      
+      // Add hover effect
+      statusDiv.onmouseenter = function() {
+        this.style.background = 'rgba(46, 125, 74, 0.2)';
+        this.style.transform = 'scale(1.02)';
+      };
+      statusDiv.onmouseleave = function() {
+        this.style.background = colors[type].bg;
+        this.style.transform = 'scale(1)';
+      };
+      
+      // Add click handler
+      statusDiv.onclick = function() {
+        if (currentFormattedAddress) {
+          const addressInput = document.getElementById('delivery-address');
+          addressInput.value = currentFormattedAddress;
+          // Trigger input event to maintain consistency
+          addressInput.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      };
+    } else {
+      statusDiv.style.cursor = 'default';
+      statusDiv.onmouseenter = null;
+      statusDiv.onmouseleave = null;
+      statusDiv.onclick = null;
+      statusDiv.title = '';
+    }
   }
 
   function hideGeocodeStatus() {
@@ -375,6 +414,12 @@
     
     let html = '';
     suggestions.slice(0, 5).forEach((s, index) => {
+      // Check if this suggestion is selected
+      const isSelected = selectedSuggestionIndex === index || selectedCalendarDate === s.date;
+      const selectedStyle = isSelected 
+        ? 'border: 2px solid var(--color-navy); background: rgba(27, 38, 59, 0.08);' 
+        : 'border: 1px solid rgba(0,0,0,0.1); background: transparent;';
+      
       // Capaciteitsinfo icons
       const driversInfo = s.available_drivers !== undefined 
         ? `<span title="${s.available_drivers} chauffeur(s) beschikbaar">👤 ${s.drivers_left || s.available_drivers}</span>` 
@@ -384,10 +429,13 @@
         : '';
       
       html += `
-        <div onclick="selectSuggestion(${index})" style="padding: 0.75rem; border: 1px solid rgba(0,0,0,0.1); border-radius: 6px; cursor: pointer; transition: all 0.15s;" 
-             onmouseover="this.style.borderColor='var(--color-sky-accent)'; this.style.background='rgba(126,184,218,0.08)';"
-             onmouseout="this.style.borderColor='rgba(0,0,0,0.1)'; this.style.background='transparent';"
-             data-index="${index}">
+        <div onclick="selectSuggestion(${index})" 
+             class="suggestion-card" 
+             data-index="${index}"
+             data-date="${s.date}"
+             style="padding: 0.75rem; ${selectedStyle} border-radius: 6px; cursor: pointer; transition: all 0.15s; margin-bottom: 0.5rem;" 
+             onmouseover="if (!this.classList.contains('selected')) { this.style.borderColor='var(--color-sky-accent)'; this.style.background='rgba(126,184,218,0.08)'; }"
+             onmouseout="if (!this.classList.contains('selected')) { this.style.borderColor='rgba(0,0,0,0.1)'; this.style.background='transparent'; }">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <span class="font-medium">${formatDate(s.date)}</span>
             <span class="badge ${s.spots_left <= 3 ? 'badge-warning' : 'badge-success'}">${s.spots_left} plekken vrij</span>
@@ -400,6 +448,26 @@
       `;
     });
     cardsDiv.innerHTML = html;
+    
+    // Update selected state
+    updateSuggestionSelection();
+  }
+  
+  function updateSuggestionSelection() {
+    // Remove selected class from all cards
+    document.querySelectorAll('.suggestion-card').forEach(card => {
+      card.classList.remove('selected');
+      const isSelected = selectedSuggestionIndex !== null && 
+                        parseInt(card.getAttribute('data-index')) === selectedSuggestionIndex;
+      if (isSelected || card.getAttribute('data-date') === selectedCalendarDate) {
+        card.classList.add('selected');
+        card.style.border = '2px solid var(--color-navy)';
+        card.style.background = 'rgba(27, 38, 59, 0.08)';
+      } else {
+        card.style.border = '1px solid rgba(0,0,0,0.1)';
+        card.style.background = 'transparent';
+      }
+    });
   }
 
   function showNoSuggestions() {
@@ -417,12 +485,22 @@
     const s = currentSuggestions[index];
     if (!s) return;
     
+    selectedSuggestionIndex = index;
     selectDate(s.date, s.region_id, s.region_name, s.delivery_count);
+    updateSuggestionSelection();
   }
 
   function selectDate(dateStr, regionId, regionName, deliveryCount) {
     document.getElementById('scheduled-date').value = dateStr;
     selectedCalendarDate = dateStr;
+    
+    // Update selected suggestion index based on date
+    if (currentSuggestions && currentSuggestions.length > 0) {
+      const suggestionIndex = currentSuggestions.findIndex(s => s.date === dateStr);
+      if (suggestionIndex !== -1) {
+        selectedSuggestionIndex = suggestionIndex;
+      }
+    }
     
     if (regionId) {
       document.getElementById('selected-region-id').value = regionId;
@@ -447,6 +525,7 @@
     }
     
     renderCalendar();
+    updateSuggestionSelection();
   }
 
   function formatDate(dateStr) {

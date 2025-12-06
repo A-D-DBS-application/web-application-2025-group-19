@@ -456,7 +456,8 @@ def get_timeslot_duration(product_category_or_name: str) -> int:
 def ensure_product(tenant_id: int, product_name: str) -> Product:
     p = Product.query.filter_by(tenant_id=tenant_id, name=product_name).first()
     if not p:
-        p = Product(tenant_id=tenant_id, name=product_name, category="custom", stock_qty=9999)
+        product_id = get_next_product_id(tenant_id)
+        p = Product(tenant_id=tenant_id, product_id=product_id, name=product_name, category="custom", stock_qty=9999)
         db.session.add(p)
         db.session.flush()  # krijg product_id
     return p
@@ -477,13 +478,15 @@ def get_run_planned_minutes(tenant_id: int, run_id: int) -> int:
 def add_order(tenant_id: int, customer_id: int, location_id: int, seller_id: int,
               product_name: str) -> int:
     product = ensure_product(tenant_id, product_name)
+    order_id = get_next_order_id(tenant_id)
     order = CustomerOrder(
-        tenant_id=tenant_id, customer_id=customer_id, location_id=location_id,
+        tenant_id=tenant_id, order_id=order_id, customer_id=customer_id, location_id=location_id,
         seller_id=seller_id, order_date=date.today(), status=OrderStatus.new
     )
     db.session.add(order)
     db.session.flush()  # krijg order_id
-    item = OrderItem(tenant_id=tenant_id, order_id=order.order_id,
+    order_item_id = get_next_order_item_id(tenant_id)
+    item = OrderItem(tenant_id=tenant_id, order_item_id=order_item_id, order_id=order.order_id,
                      product_id=product.product_id, quantity=1)
     db.session.add(item)
     db.session.commit()
@@ -510,8 +513,9 @@ def upsert_run_and_attach_delivery_with_capacity(
         # When attaching a delivery via scheduling, mark the run as active so it
         # does not count as an available (manually added) truck. Manually added
         # trucks created via the add-truck UI will use RunStatus.planned.
+        run_id = get_next_run_id(tenant_id)
         run = DeliveryRun(
-            tenant_id=tenant_id, scheduled_date=scheduled_date,
+            tenant_id=tenant_id, run_id=run_id, scheduled_date=scheduled_date,
             region_id=region_id, driver_id=driver_id,
             capacity=10, status=RunStatus.in_progress
         )
@@ -532,8 +536,9 @@ def upsert_run_and_attach_delivery_with_capacity(
             raise ValueError("Maximaal aantal stops bereikt voor deze route/dag.")
 
     # 3) delivery koppelen
+    delivery_id = get_next_delivery_id(tenant_id)
     delivery = Delivery(
-        tenant_id=tenant_id, order_id=order_id, run_id=run.run_id,
+        tenant_id=tenant_id, delivery_id=delivery_id, order_id=order_id, run_id=run.run_id,
         delivery_status=DeliveryStatus.scheduled
     )
     db.session.add(delivery)
