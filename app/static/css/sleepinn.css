@@ -327,14 +327,15 @@ a:hover {
 /* === CARDS === */
 .card {
   background: var(--color-white);
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(126, 184, 218, 0.25);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 1px 3px rgba(126, 184, 218, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
   transition: all var(--transition-normal);
 }
 
 .card:hover {
-  box-shadow: var(--shadow-md);
+  border-color: rgba(126, 184, 218, 0.4);
+  box-shadow: 0 4px 12px rgba(126, 184, 218, 0.15), 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 .card-header {
@@ -372,7 +373,7 @@ a:hover {
   font-size: 0.875rem;
   color: var(--color-black);
   background: var(--color-white);
-  border: 1px solid rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(126, 184, 218, 0.3);
   border-radius: var(--radius-md);
   transition: all var(--transition-fast);
 }
@@ -388,8 +389,9 @@ a:hover {
   color: var(--color-mist-blue);
 }
 
-.form-input:hover {
-  border-color: rgba(0, 0, 0, 0.25);
+.form-input:hover,
+.form-select:hover {
+  border-color: rgba(126, 184, 218, 0.5);
 }
 
 textarea.form-input {
@@ -400,9 +402,10 @@ textarea.form-input {
 /* === TABLES === */
 .table-container {
   background: var(--color-white);
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(126, 184, 218, 0.25);
   border-radius: var(--radius-lg);
   overflow: hidden;
+  box-shadow: 0 1px 3px rgba(126, 184, 218, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 .table {
@@ -496,12 +499,13 @@ textarea.form-input {
 /* === STAT CARDS === */
 .stat-card {
   background: var(--color-white);
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(126, 184, 218, 0.25);
   border-radius: var(--radius-lg);
   padding: var(--spacing-lg);
   transition: all var(--transition-normal);
   position: relative;
   overflow: hidden;
+  box-shadow: 0 1px 3px rgba(126, 184, 218, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 .stat-card::before {
@@ -511,14 +515,14 @@ textarea.form-input {
   left: 0;
   width: 3px;
   height: 100%;
-  background: transparent;
+  background: rgba(126, 184, 218, 0.3);
   transition: background var(--transition-normal);
 }
 
 .stat-card:hover {
-  box-shadow: var(--shadow-md);
+  box-shadow: 0 4px 12px rgba(126, 184, 218, 0.15), 0 2px 4px rgba(0, 0, 0, 0.05);
   transform: translateY(-2px);
-  border-color: rgba(126, 184, 218, 0.3);
+  border-color: rgba(126, 184, 218, 0.45);
 }
 
 .stat-card:hover::before {
