@@ -952,16 +952,20 @@ def get_suggested_dates_for_address(tenant_id: int, lat: float, lng: float, max_
     
     # Sorteer zodat datums met bestaande leveringen eerst komen
     # Prioriteit: 1) datums met leveringen (delivery_count > 0) eerst
-    #             2) binnen datums met leveringen: hogere delivery_count eerst
-    #             3) dan op afstand (dichtstbijzijnde eerst)
-    #             4) dan op datum (eerste eerst)
-    #             5) datums zonder leveringen daarna op datum en afstand
-    suggestions.sort(key=lambda x: (
-        0 if x["delivery_count"] > 0 else 1,  # Datums met leveringen eerst
-        -x["delivery_count"],  # Meer leveringen = hogere prioriteit
-        x["distance_km"],  # Dichtstbijzijnde eerst
-        x["date"]  # Eerste datum eerst
-    ))
+    #             2) binnen datums met leveringen: dichtstbijzijnde eerst (distance_km)
+    #             3) datums zonder leveringen daarna, gesorteerd op datum en dan afstand
+    # Scheid eerst op delivery_count, dan sorteer binnen elke groep met consistente types
+    suggestions_with_deliveries = [s for s in suggestions if s["delivery_count"] > 0]
+    suggestions_without_deliveries = [s for s in suggestions if s["delivery_count"] == 0]
+    
+    # Sorteer datums met leveringen: afstand eerst, dan datum
+    suggestions_with_deliveries.sort(key=lambda x: (x["distance_km"], x["date"]))
+    
+    # Sorteer datums zonder leveringen: datum eerst, dan afstand
+    suggestions_without_deliveries.sort(key=lambda x: (x["date"], x["distance_km"]))
+    
+    # Combineer: eerst met leveringen, dan zonder
+    suggestions = suggestions_with_deliveries + suggestions_without_deliveries
     
     # Verwijder duplicaten (alleen eerste regio per datum behouden)
     seen_dates = set()

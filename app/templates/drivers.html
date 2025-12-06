@@ -32,11 +32,55 @@
           <label class="form-label">E-mailadres</label>
           <input type="email" name="email" placeholder="jan.janssen@bedrijf.be" class="form-input" required>
         </div>
-        <div class="form-group">
-          <label class="form-label">Beschikbaarheidsdatum</label>
-          <input type="date" name="availability_date" class="form-input">
+      </div>
+      
+      <!-- Beschikbaarheidskalender -->
+      <div class="form-group mt-4">
+        <label class="form-label">Beschikbaarheidsdatums</label>
+        <div class="card" style="margin-top: 0.5rem;">
+          <div class="card-body">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
+              <!-- Maand 1 -->
+              <div>
+                <h4 id="month1-label" class="font-medium text-center mb-3" style="color: var(--color-navy);"></h4>
+                <div class="calendar-header" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; margin-bottom: 4px;">
+                  <div class="text-center text-xs font-medium text-muted" style="padding: 6px 0;">Ma</div>
+                  <div class="text-center text-xs font-medium text-muted" style="padding: 6px 0;">Di</div>
+                  <div class="text-center text-xs font-medium text-muted" style="padding: 6px 0;">Wo</div>
+                  <div class="text-center text-xs font-medium text-muted" style="padding: 6px 0;">Do</div>
+                  <div class="text-center text-xs font-medium text-muted" style="padding: 6px 0;">Vr</div>
+                  <div class="text-center text-xs font-medium text-muted" style="padding: 6px 0;">Za</div>
+                  <div class="text-center text-xs font-medium text-muted" style="padding: 6px 0;">Zo</div>
+                </div>
+                <div id="month1-days" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px;"></div>
+              </div>
+              
+              <!-- Maand 2 -->
+              <div>
+                <h4 id="month2-label" class="font-medium text-center mb-3" style="color: var(--color-navy);"></h4>
+                <div class="calendar-header" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; margin-bottom: 4px;">
+                  <div class="text-center text-xs font-medium text-muted" style="padding: 6px 0;">Ma</div>
+                  <div class="text-center text-xs font-medium text-muted" style="padding: 6px 0;">Di</div>
+                  <div class="text-center text-xs font-medium text-muted" style="padding: 6px 0;">Wo</div>
+                  <div class="text-center text-xs font-medium text-muted" style="padding: 6px 0;">Do</div>
+                  <div class="text-center text-xs font-medium text-muted" style="padding: 6px 0;">Vr</div>
+                  <div class="text-center text-xs font-medium text-muted" style="padding: 6px 0;">Za</div>
+                  <div class="text-center text-xs font-medium text-muted" style="padding: 6px 0;">Zo</div>
+                </div>
+                <div id="month2-days" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px;"></div>
+              </div>
+            </div>
+            
+            <p id="calendar-hint" class="text-xs text-muted mt-4" style="text-align: center;">
+              Klik op dagen om ze te selecteren als beschikbaarheidsdatums. Geselecteerde dagen worden groen weergegeven.
+            </p>
+            
+            <!-- Hidden input voor geselecteerde datums -->
+            <input type="hidden" id="selected-dates-input" name="availability_dates" value="">
+          </div>
         </div>
       </div>
+      
       <div class="mt-4">
         <button type="submit" class="btn btn-primary">Chauffeur toevoegen</button>
       </div>
@@ -122,4 +166,167 @@
     </div>
   {% endif %}
 </div>
+
+<style>
+  .calendar-day {
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    font-size: 0.8125rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    position: relative;
+    background: rgba(0, 0, 0, 0.03);
+    color: var(--color-dark-gray);
+  }
+  
+  .calendar-day:hover:not(.disabled):not(.empty):not(.past) {
+    transform: scale(1.08);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  }
+  
+  .calendar-day.empty {
+    background: transparent;
+    cursor: default;
+  }
+  
+  .calendar-day.past {
+    background: rgba(0, 0, 0, 0.05);
+    color: rgba(0, 0, 0, 0.25);
+    cursor: not-allowed;
+  }
+  
+  /* Groen - Beschikbaar / Selecteerbaar */
+  .calendar-day.available {
+    background: rgba(0, 0, 0, 0.03);
+    color: var(--color-dark-gray);
+    font-weight: 500;
+  }
+  
+  .calendar-day.available:hover {
+    background: rgba(16, 185, 129, 0.2);
+    color: #065F46;
+  }
+  
+  .calendar-day.today {
+    border: 2px solid var(--color-navy);
+    font-weight: 600;
+  }
+  
+  /* Geselecteerde dag - Groen */
+  .calendar-day.selected {
+    background: rgba(16, 185, 129, 0.3) !important;
+    color: #065F46 !important;
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+  }
+  
+  .calendar-day.selected:hover {
+    background: rgba(16, 185, 129, 0.5) !important;
+  }
+</style>
+
+<script>
+  let selectedDates = new Set(); // Set voor unieke datums
+  const monthNames = ['Januari', 'Februari', 'Maart', 'April', 'Mei', 'Juni', 
+                      'Juli', 'Augustus', 'September', 'Oktober', 'November', 'December'];
+
+  document.addEventListener('DOMContentLoaded', function() {
+    renderCalendar();
+  });
+
+  function renderCalendar() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    // Maand 1: huidige maand
+    const month1 = today.getMonth();
+    const year1 = today.getFullYear();
+    
+    // Maand 2: volgende maand
+    let month2 = month1 + 1;
+    let year2 = year1;
+    if (month2 > 11) {
+      month2 = 0;
+      year2++;
+    }
+    
+    // Render beide maanden
+    renderMonth('month1', month1, year1, today);
+    renderMonth('month2', month2, year2, today);
+    
+    updateSelectedDatesInput();
+  }
+
+  function renderMonth(containerId, month, year, today) {
+    // Set label
+    document.getElementById(`${containerId}-label`).textContent = `${monthNames[month]} ${year}`;
+    
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    
+    // Get the day of week for the first day (0 = Sunday, we want Monday = 0)
+    let startDay = firstDay.getDay() - 1;
+    if (startDay < 0) startDay = 6; // Sunday becomes 6
+    
+    const daysContainer = document.getElementById(`${containerId}-days`);
+    daysContainer.innerHTML = '';
+    
+    // Empty cells before the first day
+    for (let i = 0; i < startDay; i++) {
+      const emptyCell = document.createElement('div');
+      emptyCell.className = 'calendar-day empty';
+      daysContainer.appendChild(emptyCell);
+    }
+    
+    // Days of the month
+    for (let day = 1; day <= lastDay.getDate(); day++) {
+      const dateObj = new Date(year, month, day);
+      const dateStr = dateObj.toISOString().split('T')[0];
+      const isPast = dateObj < today;
+      const isToday = dateObj.getTime() === today.getTime();
+      const isSelected = selectedDates.has(dateStr);
+      
+      const dayCell = document.createElement('div');
+      dayCell.className = 'calendar-day';
+      dayCell.textContent = day;
+      dayCell.dataset.date = dateStr;
+      
+      if (isPast) {
+        dayCell.classList.add('past');
+      } else {
+        dayCell.classList.add('available');
+        dayCell.onclick = () => toggleDate(dateStr);
+      }
+      
+      if (isToday) {
+        dayCell.classList.add('today');
+      }
+      
+      if (isSelected) {
+        dayCell.classList.add('selected');
+      }
+      
+      daysContainer.appendChild(dayCell);
+    }
+  }
+
+  function toggleDate(dateStr) {
+    if (selectedDates.has(dateStr)) {
+      selectedDates.delete(dateStr);
+    } else {
+      selectedDates.add(dateStr);
+    }
+    renderCalendar(); // Re-render om selectie te updaten
+    updateSelectedDatesInput();
+  }
+
+  function updateSelectedDatesInput() {
+    // Update hidden input met alle geselecteerde datums (comma-separated)
+    const sortedDates = Array.from(selectedDates).sort();
+    document.getElementById('selected-dates-input').value = sortedDates.join(',');
+  }
+</script>
 {% endblock %}
