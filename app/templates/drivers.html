@@ -2,9 +2,8 @@
 
 {% block content %}
 <div class="container mx-auto p-6">
-  <div class="flex items-center justify-between mb-6">
+  <div class="mb-6">
     <h1 class="text-3xl font-semibold">Chauffeurs</h1>
-    <a href="{{ url_for('main.index') }}" class="bg-gray-800 text-white px-4 py-2 rounded hover:bg-gray-700">Homepage</a>
   </div>
 
   <div class="mb-6 card-ghost p-4">
@@ -55,8 +54,7 @@
     </div>
   {% else %}
     <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
-      <p class="text-gray-700 mb-4">Er zijn geen beschikbare chauffeurs gevonden.</p>
-      <a href="{{ url_for('main.index') }}" class="text-blue-600 hover:underline">← Terug naar Dashboard</a>
+      <p class="text-gray-700">Er zijn geen beschikbare chauffeurs gevonden.</p>
     </div>
   {% endif %}
 </div>
