@@ -950,8 +950,18 @@ def get_suggested_dates_for_address(tenant_id: int, lat: float, lng: float, max_
                     "trucks_left": capacity_info["trucks_left"]
                 })
     
-    # Sorteer op datum en afstand
-    suggestions.sort(key=lambda x: (x["date"], x["distance_km"]))
+    # Sorteer zodat datums met bestaande leveringen eerst komen
+    # Prioriteit: 1) datums met leveringen (delivery_count > 0) eerst
+    #             2) binnen datums met leveringen: hogere delivery_count eerst
+    #             3) dan op afstand (dichtstbijzijnde eerst)
+    #             4) dan op datum (eerste eerst)
+    #             5) datums zonder leveringen daarna op datum en afstand
+    suggestions.sort(key=lambda x: (
+        0 if x["delivery_count"] > 0 else 1,  # Datums met leveringen eerst
+        -x["delivery_count"],  # Meer leveringen = hogere prioriteit
+        x["distance_km"],  # Dichtstbijzijnde eerst
+        x["date"]  # Eerste datum eerst
+    ))
     
     # Verwijder duplicaten (alleen eerste regio per datum behouden)
     seen_dates = set()
