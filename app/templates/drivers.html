@@ -129,10 +129,17 @@
             </td>
             <td>{{ driver.email or '—' }}</td>
             <td>
-              {% if driver.available_today %}
-                <span class="badge badge-success">Beschikbaar vandaag</span>
-              {% elif driver.available_date %}
-                <span class="text-muted">{{ driver.available_date }}</span>
+              {% if driver.available_dates and driver.available_dates|length > 0 %}
+                {% if driver.available_today %}
+                  <span class="badge badge-success">Beschikbaar vandaag</span>
+                  {% if driver.available_dates|length > 1 %}
+                    <br><span class="text-muted" style="display: block; margin-top: 4px; font-size: 0.875rem;">
+                      Ook: {{ driver.available_dates|join(', ') }}
+                    </span>
+                  {% endif %}
+                {% else %}
+                  <span class="text-muted">{{ driver.available_dates|join(', ') }}</span>
+                {% endif %}
               {% else %}
                 <span class="text-muted">Geen beschikbaarheid</span>
               {% endif %}
@@ -260,6 +267,13 @@
     updateSelectedDatesInput();
   }
 
+  // Helper function to format date as YYYY-MM-DD without timezone conversion
+  function formatDateString(year, month, day) {
+    const m = String(month + 1).padStart(2, '0');
+    const d = String(day).padStart(2, '0');
+    return `${year}-${m}-${d}`;
+  }
+
   function renderMonth(containerId, month, year, today) {
     // Set label
     document.getElementById(`${containerId}-label`).textContent = `${monthNames[month]} ${year}`;
@@ -284,7 +298,7 @@
     // Days of the month
     for (let day = 1; day <= lastDay.getDate(); day++) {
       const dateObj = new Date(year, month, day);
-      const dateStr = dateObj.toISOString().split('T')[0];
+      const dateStr = formatDateString(year, month, day);
       const isPast = dateObj < today;
       const isToday = dateObj.getTime() === today.getTime();
       const isSelected = selectedDates.has(dateStr);

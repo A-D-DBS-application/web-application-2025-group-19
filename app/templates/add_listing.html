@@ -560,6 +560,13 @@
     renderMonth('month2', month2, year2, today);
   }
 
+  // Helper function to format date as YYYY-MM-DD without timezone conversion
+  function formatDateString(year, month, day) {
+    const m = String(month + 1).padStart(2, '0');
+    const d = String(day).padStart(2, '0');
+    return `${year}-${m}-${d}`;
+  }
+
   function renderMonth(containerId, month, year, today) {
     // Set label
     document.getElementById(`${containerId}-label`).textContent = `${monthNames[month]} ${year}`;
@@ -584,7 +591,7 @@
     // Days of the month
     for (let day = 1; day <= lastDay.getDate(); day++) {
       const dateObj = new Date(year, month, day);
-      const dateStr = dateObj.toISOString().split('T')[0];
+      const dateStr = formatDateString(year, month, day);
       const isPast = dateObj < today;
       const isToday = dateObj.getTime() === today.getTime();
       const isSelected = dateStr === selectedCalendarDate;
