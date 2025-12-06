@@ -30,18 +30,18 @@ def create_delivery_ical(deliveries: list, calendar_name: str = "Leveringen") ->
     cal = Calendar()
     
     # Kalender metadata
-    cal.add('prodid', '-//Delivery Schedule//deliveryschedule.be//')
+    cal.add('prodid', '-//Sleep Inn Scheduler//sleepinn.be//')
     cal.add('version', '2.0')
     cal.add('calscale', 'GREGORIAN')
     cal.add('method', 'PUBLISH')
-    cal.add('x-wr-calname', calendar_name)
+    cal.add('x-wr-calname', f"Sleep Inn - {calendar_name}")
     cal.add('x-wr-timezone', 'Europe/Brussels')
     
     for delivery in deliveries:
         event = Event()
         
         # Unieke ID voor het event
-        uid = f"delivery-{delivery.get('delivery_id', 'unknown')}@deliveryschedule.be"
+        uid = f"delivery-{delivery.get('delivery_id', 'unknown')}@sleepinn.be"
         event.add('uid', uid)
         
         # Titel van het event
@@ -114,18 +114,18 @@ def create_driver_schedule_ical(driver_name: str, deliveries: list,
     cal = Calendar()
     
     # Kalender metadata
-    cal.add('prodid', '-//Delivery Schedule//deliveryschedule.be//')
+    cal.add('prodid', '-//Sleep Inn Scheduler//sleepinn.be//')
     cal.add('version', '2.0')
     cal.add('calscale', 'GREGORIAN')
     cal.add('method', 'PUBLISH')
-    cal.add('x-wr-calname', f"Leveringen - {driver_name}")
+    cal.add('x-wr-calname', f"Sleep Inn - Leveringen {driver_name}")
     cal.add('x-wr-timezone', 'Europe/Brussels')
     
     # Voeg leveringen toe
     for delivery in deliveries:
         event = Event()
         
-        uid = f"delivery-{delivery.get('delivery_id', 'unknown')}-{driver_name.replace(' ', '')}@deliveryschedule.be"
+        uid = f"delivery-{delivery.get('delivery_id', 'unknown')}-{driver_name.replace(' ', '')}@sleepinn.be"
         event.add('uid', uid)
         
         region = delivery.get('region_name', 'Onbekend')
@@ -172,7 +172,7 @@ def create_driver_schedule_ical(driver_name: str, deliveries: list,
             event = Event()
             
             uid_hash = hashlib.md5(f"{driver_name}-{avail_date}".encode()).hexdigest()[:8]
-            event.add('uid', f"availability-{uid_hash}@deliveryschedule.be")
+            event.add('uid', f"availability-{uid_hash}@sleepinn.be")
             event.add('summary', f"✅ Beschikbaar voor leveringen")
             
             if isinstance(avail_date, datetime):
