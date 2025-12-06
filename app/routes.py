@@ -20,7 +20,7 @@ def get_mapbox_token():
     from flask import current_app
     return current_app.config.get("MAPBOX_ACCESS_TOKEN") or os.getenv(
         "MAPBOX_ACCESS_TOKEN", 
-        "pk.eyJ1IjoibWljaGFlbG5vdGVtYW4iLCJhIjoiY200bWdrYm9xMTBjNDJtczl2OHo1NjJ0OCJ9.UWLYzGIxyJN5fzq2sLOIhg"
+        "pk.eyJ1IjoibTFjaGFlbHYiLCJhIjoiY21pbmxsaGU4MDYzcTNkc2FyeTlkNzV1YiJ9.YVfQAyc5-VD11S3w2ACJAw"
     )
 
 main = Blueprint("main", __name__)

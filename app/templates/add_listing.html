@@ -59,6 +59,7 @@
                     <input type="hidden" name="lat" id="lat-input" value="">
                     <input type="hidden" name="lng" id="lng-input" value="">
                     <input type="hidden" name="selected_region_id" id="selected-region-id" value="">
+                    <input type="hidden" name="region_id" id="region-input" value="">
                     
                     <div class="mb-4">
                         <label class="block text-sm text-gray-600 mb-1">Adres *</label>
@@ -86,12 +87,6 @@
                     <div class="mb-4">
                         <label class="block text-sm text-gray-600 mb-1">Product ID *</label>
                         <input type="number" name="order_id" placeholder="Voer product ID in" class="w-full border rounded-md p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" required>
-                    </div>
-                    
-                    <div class="mb-4">
-                        <label class="block text-sm text-gray-600 mb-1">Regio naam (optioneel)</label>
-                        <input type="text" name="region_id" id="region-input" placeholder="Wordt automatisch ingevuld of maak nieuwe regio" class="w-full border rounded-md p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                        <p class="text-xs text-gray-500 mt-1">Laat leeg om automatisch toe te wijzen aan een bestaande regio</p>
                     </div>
                     
                     <button type="submit" id="submit-btn" class="mt-3 w-full bg-black text-white py-3 rounded-md hover:bg-gray-800 transition font-medium">
@@ -158,15 +153,6 @@
                 </ul>
             </div>
             
-            <div class="card-ghost p-4">
-                <h3 class="font-semibold mb-3">Snelle Links</h3>
-                <ul class="space-y-2">
-                    <li><a href="{{ url_for('main.index') }}" class="text-blue-600 hover:underline text-sm">← Terug naar Dashboard</a></li>
-                    <li><a href="{{ url_for('main.listings') }}" class="text-blue-600 hover:underline text-sm">Bekijk alle leveringen</a></li>
-                    <li><a href="{{ url_for('main.drivers_list') }}" class="text-blue-600 hover:underline text-sm">Bekijk chauffeurs</a></li>
-                    <li><a href="{{ url_for('main.trucks_list') }}" class="text-blue-600 hover:underline text-sm">Bekijk trucks</a></li>
-                </ul>
-            </div>
         </aside>
     </div>
 
@@ -338,8 +324,6 @@
             
             // Zet geselecteerde regio
             document.getElementById('selected-region-id').value = suggestion.region_id;
-            
-            // Update regio naam veld
             document.getElementById('region-input').value = suggestion.region_name;
             
             // Visuele feedback

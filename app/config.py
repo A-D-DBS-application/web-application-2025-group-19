@@ -41,6 +41,6 @@ class Config:
     # Mapbox API configuratie
     MAPBOX_ACCESS_TOKEN = os.getenv(
         "MAPBOX_ACCESS_TOKEN", 
-        "pk.eyJ1IjoibWljaGFlbG5vdGVtYW4iLCJhIjoiY200bWdrYm9xMTBjNDJtczl2OHo1NjJ0OCJ9.UWLYzGIxyJN5fzq2sLOIhg"
+        "pk.eyJ1IjoibTFjaGFlbHYiLCJhIjoiY21pbmxsaGU4MDYzcTNkc2FyeTlkNzV1YiJ9.YVfQAyc5-VD11S3w2ACJAw"
     )
 
