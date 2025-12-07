@@ -459,7 +459,7 @@ def add_driver():
 
     if not first or not last or not email:
         flash("Vul voornaam, achternaam en e-mail in.", "error")
-        return redirect(url_for("main.drivers"))
+        return redirect(url_for("main.drivers_list"))
 
     tid = tenant_id()
     current_employee_id = session.get("employee_id")
@@ -482,7 +482,7 @@ def add_driver():
         else:
             # Different person with same email: prevent duplicate
             flash("E-mailadres bestaat al voor een andere medewerker.", "error")
-            return redirect(url_for("main.drivers"))
+            return redirect(url_for("main.drivers_list"))
     else:
         # Email doesn't exist: create new employee
         next_emp_id = get_next_employee_id(tid)
@@ -556,7 +556,7 @@ def add_driver():
         if availability_errors:
             db.session.commit()
             flash(f"Chauffeur {first} {last} toegevoegd, maar beschikbaarheid kon niet worden ingesteld voor: {', '.join(availability_errors)}", "warning")
-            return redirect(url_for("main.drivers"))
+            return redirect(url_for("main.drivers_list"))
         
         db.session.commit()
         
@@ -567,7 +567,7 @@ def add_driver():
             dates_str = ", ".join([d.strftime('%d-%m-%Y') for d in sorted(availability_dates)])
             flash(f"Chauffeur {first} {last} toegevoegd en beschikbaar gemaakt voor {len(availability_dates)} datums: {dates_str}.", "success")
         
-        return redirect(url_for("main.drivers"))
+        return redirect(url_for("main.drivers_list"))
     except Exception as e:
         db.session.rollback()
         current_app.logger.exception(f"Error adding driver: {e}")
@@ -578,7 +578,7 @@ def add_driver():
         else:
             flash(f"Fout bij het toevoegen van chauffeur: {error_msg[:150]}", "error")
     
-        return redirect(url_for("main.drivers"))
+        return redirect(url_for("main.drivers_list"))
 
 # --- Suggesties per regio ---
 @main.route("/suggest/<int:region_id>", methods=["GET"])
