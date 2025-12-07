@@ -12,7 +12,7 @@ from .models import (
     upsert_run_and_attach_delivery_with_capacity, get_delivery_overview, suggest_delivery_days,
     find_matching_regions, get_suggested_dates_for_address, add_address_to_region,
     create_new_region_with_address, count_deliveries_for_region_date, haversine_distance,
-    get_next_truck_id, get_next_employee_id, get_capacity_info_for_date, count_available_drivers_for_date,
+    get_next_truck_id, get_next_employee_id, get_next_availability_id, get_capacity_info_for_date, count_available_drivers_for_date,
     count_available_trucks, count_active_regions_for_date
 )
 
@@ -291,40 +291,6 @@ def delete_delivery(delivery_id):
     return redirect(url_for("main.listings"))
 
 
-@main.route("/drivers", methods=["GET"])
-def drivers():
-    # Show available drivers for the current tenant
-    if "employee_id" not in session:
-        return redirect(url_for("main.login"))
-
-    tid = tenant_id()
-    try:
-        drivers_list = db.session.query(Employee).filter(
-            Employee.tenant_id == tid,
-            Employee.role == EmployeeRole.driver,
-            Employee.active.is_(True)
-        ).order_by(Employee.last_name.asc()).all()
-        
-        # Add availability information to each driver
-        today = date.today()
-        for driver in drivers_list:
-            # Get the most recent availability
-            availability = Availability.query.filter_by(
-                tenant_id=tid,
-                employee_id=driver.employee_id,
-                active=True
-            ).order_by(Availability.available_date.desc()).first()
-            
-            # Add computed attributes for template
-            driver.name = f"{driver.first_name} {driver.last_name}"
-            driver.available_today = availability and availability.available_date == today
-            driver.available_date = availability.available_date.strftime('%d-%m-%Y') if availability else None
-            
-    except Exception as e:
-        current_app.logger.exception(f"Failed to query drivers for drivers overview: {e}")
-        drivers_list = []
-
-    return render_template("drivers.html", drivers=drivers_list)
 
 # --- Registreren ---
 @main.route("/register", methods=["GET", "POST"])
@@ -489,19 +455,36 @@ def add_driver():
     first = request.form.get("first_name", "").strip()
     last = request.form.get("last_name", "").strip()
     email = request.form.get("email", "").strip().lower()
-    availability_date_str = request.form.get("availability_date", "").strip()
+    availability_dates_str = request.form.get("availability_dates", "").strip()
 
     if not first or not last or not email:
         flash("Vul voornaam, achternaam en e-mail in.", "error")
-        return redirect(url_for("main.index"))
+        return redirect(url_for("main.drivers"))
 
     tid = tenant_id()
-    # Prevent duplicates by email
-    if Employee.query.filter_by(tenant_id=tid, email=email).first():
-        flash("E-mailadres bestaat al voor een medewerker.", "error")
-        return redirect(url_for("main.index"))
-
-    try:
+    current_employee_id = session.get("employee_id")
+    
+    # Check if email already exists
+    existing_emp = Employee.query.filter_by(tenant_id=tid, email=email).first()
+    
+    if existing_emp:
+        # Check if it's the same person (current logged-in user)
+        if existing_emp.employee_id == current_employee_id:
+            # Same person: use existing employee, update info if needed, and add availability
+            emp = existing_emp
+            # Update name if provided (user might want to correct it)
+            if first and first != emp.first_name:
+                emp.first_name = first
+            if last and last != emp.last_name:
+                emp.last_name = last
+            # Update role to driver so they can be used as a driver
+            emp.role = EmployeeRole.driver
+        else:
+            # Different person with same email: prevent duplicate
+            flash("E-mailadres bestaat al voor een andere medewerker.", "error")
+            return redirect(url_for("main.drivers"))
+    else:
+        # Email doesn't exist: create new employee
         next_emp_id = get_next_employee_id(tid)
         emp = Employee(
             tenant_id=tid, employee_id=next_emp_id, first_name=first, last_name=last, email=email,
@@ -509,28 +492,82 @@ def add_driver():
         )
         db.session.add(emp)
         db.session.flush()  # Get the id before commit
+
+    try:
         
-        # Set availability based on user input or use today as default
-        if availability_date_str:
+        # Parse availability dates (comma-separated)
+        availability_dates = []
+        if availability_dates_str:
+            date_strings = [d.strip() for d in availability_dates_str.split(',') if d.strip()]
+            for date_str in date_strings:
+                try:
+                    availability_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+                    availability_dates.append(availability_date)
+                except ValueError:
+                    current_app.logger.warning(f"Invalid date format: {date_str}")
+        
+        # If no dates provided, use today as default
+        if not availability_dates:
+            availability_dates = [date.today()]
+        
+        # Set availability for all selected dates (within the same transaction)
+        # Get base availability_id once to avoid duplicate IDs when creating multiple records
+        # Also account for records already in the session (not yet committed)
+        db_max_id = db.session.query(db.func.max(Availability.availability_id)).filter(
+            Availability.tenant_id == tid
+        ).scalar() or 0
+        
+        # Check for pending records in session that haven't been committed yet
+        session_max_id = db_max_id
+        for obj in db.session.new:
+            if isinstance(obj, Availability) and obj.tenant_id == tid:
+                if obj.availability_id and obj.availability_id > session_max_id:
+                    session_max_id = obj.availability_id
+        
+        base_availability_id = session_max_id + 1
+        availability_counter = 0
+        availability_errors = []
+        
+        for availability_date in availability_dates:
             try:
-                availability_date = datetime.strptime(availability_date_str, "%Y-%m-%d").date()
-            except ValueError:
-                availability_date = date.today()
-        else:
-            availability_date = date.today()
+                # Check if availability already exists
+                existing = Availability.query.filter_by(
+                    tenant_id=tid, employee_id=emp.employee_id, available_date=availability_date
+                ).first()
+                
+                if existing:
+                    existing.active = True
+                else:
+                    # Use sequential IDs within this transaction to avoid duplicates
+                    availability_id = base_availability_id + availability_counter
+                    availability_counter += 1
+                    
+                    av = Availability(
+                        tenant_id=tid, availability_id=availability_id, employee_id=emp.employee_id,
+                        available_date=availability_date, active=True
+                    )
+                    db.session.add(av)
+                
+                current_app.logger.info(f"Added driver {first} {last} with availability for {availability_date}")
+            except Exception as e:
+                current_app.logger.exception(f"Failed to set availability for {availability_date}: {e}")
+                availability_errors.append(str(availability_date))
         
-        try:
-            set_employee_availability(tid, emp.employee_id, availability_date, active=True)
-            current_app.logger.info(f"Added driver {first} {last} with availability for {availability_date}")
-        except Exception as e:
-            current_app.logger.exception(f"Failed to set availability for new driver: {e}")
-            # Still commit the driver even if availability fails
+        if availability_errors:
             db.session.commit()
-            flash(f"Chauffeur {first} {last} toegevoegd, maar beschikbaarheid kon niet worden ingesteld: {str(e)}", "warning")
-            return redirect(url_for("main.index"))
+            flash(f"Chauffeur {first} {last} toegevoegd, maar beschikbaarheid kon niet worden ingesteld voor: {', '.join(availability_errors)}", "warning")
+            return redirect(url_for("main.drivers"))
         
         db.session.commit()
-        flash(f"Chauffeur {first} {last} toegevoegd en beschikbaar gemaakt voor {availability_date.strftime('%d-%m-%Y')}.", "success")
+        
+        # Create success message with all dates
+        if len(availability_dates) == 1:
+            flash(f"Chauffeur {first} {last} toegevoegd en beschikbaar gemaakt voor {availability_dates[0].strftime('%d-%m-%Y')}.", "success")
+        else:
+            dates_str = ", ".join([d.strftime('%d-%m-%Y') for d in sorted(availability_dates)])
+            flash(f"Chauffeur {first} {last} toegevoegd en beschikbaar gemaakt voor {len(availability_dates)} datums: {dates_str}.", "success")
+        
+        return redirect(url_for("main.drivers"))
     except Exception as e:
         db.session.rollback()
         current_app.logger.exception(f"Error adding driver: {e}")
@@ -541,7 +578,7 @@ def add_driver():
         else:
             flash(f"Fout bij het toevoegen van chauffeur: {error_msg[:150]}", "error")
     
-    return redirect(url_for("main.index"))
+        return redirect(url_for("main.drivers"))
 
 # --- Suggesties per regio ---
 @main.route("/suggest/<int:region_id>", methods=["GET"])
@@ -1104,7 +1141,7 @@ def delete_truck(truck_id):
 # --- Drivers Management (Improved) ---
 @main.route("/drivers", methods=["GET"])
 def drivers_list():
-    """Show all active drivers for current tenant with availability info."""
+    """Show all active drivers for current tenant with all their availability dates."""
     if "employee_id" not in session:
         return redirect(url_for("main.login"))
     
@@ -1112,36 +1149,51 @@ def drivers_list():
     today = date.today()
     
     try:
-        # Get all active drivers with their availability info
-        drivers = db.session.query(
-            Employee.employee_id,
-            Employee.first_name,
-            Employee.last_name,
-            Employee.email,
-            Availability.available_date,
-            Availability.active.label('is_available')
-        ).outerjoin(
-            Availability,
-            (Employee.employee_id == Availability.employee_id) & (Availability.available_date >= today)
-        ).filter(
+        # First, get all active drivers
+        all_drivers = db.session.query(Employee).filter(
             Employee.tenant_id == tid,
             Employee.role == EmployeeRole.driver,
             Employee.active.is_(True)
-        ).order_by(Employee.last_name.asc(), Availability.available_date.asc()).all()
+        ).order_by(Employee.last_name.asc()).all()
         
         driver_list = []
-        seen_ids = set()  # To avoid duplicates
-        for row in drivers:
-            emp_id = row.employee_id
-            if emp_id not in seen_ids:
-                seen_ids.add(emp_id)
-                driver_list.append({
-                    "employee_id": emp_id,
-                    "name": f"{row.first_name} {row.last_name}",
-                    "email": row.email,
-                    "available_date": row.available_date.strftime('%d-%m-%Y') if row.available_date else 'Niet ingesteld',
-                    "available_today": row.is_available and row.available_date == today if row.available_date else False
-                })
+        
+        # For each driver, get all their availability dates
+        for driver in all_drivers:
+            # Get all availability dates for this driver (current and future)
+            availabilities = db.session.query(Availability).filter(
+                Availability.tenant_id == tid,
+                Availability.employee_id == driver.employee_id,
+                Availability.active.is_(True),
+                Availability.available_date >= today
+            ).order_by(Availability.available_date.asc()).all()
+            
+            # Format all available dates
+            available_dates = [av.available_date.strftime('%d-%m-%Y') for av in availabilities]
+            
+            # Check if available today - explicitly check if there's an availability record for today
+            # Convert both to date objects to ensure correct comparison
+            available_today = False
+            for av in availabilities:
+                # Ensure we compare date objects (not datetime)
+                av_date = av.available_date
+                if isinstance(av_date, datetime):
+                    av_date = av_date.date()
+                if av_date == today:
+                    available_today = True
+                    break
+            
+            # Get the first future availability date for display
+            first_available_date = available_dates[0] if available_dates else None
+            
+            driver_list.append({
+                "employee_id": driver.employee_id,
+                "name": f"{driver.first_name} {driver.last_name}",
+                "email": driver.email,
+                "available_date": first_available_date,
+                "available_dates": available_dates,
+                "available_today": available_today
+            })
     except Exception as e:
         current_app.logger.exception(f"Error fetching drivers: {e}")
         driver_list = []
