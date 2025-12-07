@@ -562,7 +562,7 @@ def schedule():
         return redirect(url_for("main.login"))
 
     tid = tenant_id()
-    order_id = request.form.get("order_id")
+    product_description = request.form.get("product_description", "").strip()
     address = request.form.get("address")
     region_name = request.form.get("region_id")  # Municipality name (optional)
     scheduled_date_str = request.form.get("scheduled_date")
@@ -572,11 +572,14 @@ def schedule():
     lng_str = request.form.get("lng", "")
     selected_region_id = request.form.get("selected_region_id", "")
 
+    if not product_description:
+        flash("Vul een product beschrijving in.", "error")
+        return redirect(url_for("main.add_listing"))
+    
     try:
-        order_id = int(order_id)
         scheduled_date = date.fromisoformat(scheduled_date_str)
     except Exception:
-        flash("Ongeldige invoer.", "error")
+        flash("Ongeldige datum.", "error")
         return redirect(url_for("main.add_listing"))
 
     # Parse coördinaten
@@ -667,59 +670,53 @@ def schedule():
         drivers = get_available_drivers(tid, region_id, scheduled_date)
         driver_id = drivers[0].employee_id if drivers else None
 
-    # Ensure the order exists; if user typed an ID that doesn't exist, create a demo order
+    # Always create a new order with the product description
     try:
-        existing_order = CustomerOrder.query.filter_by(tenant_id=tid, order_id=order_id).first()
-    except Exception:
-        existing_order = None
-
-    if not existing_order:
-        try:
-            # Ensure we have a valid region_id before creating location
-            if region_id is None:
-                # Create a default region if none exists
-                from .models import get_next_region_id
-                default_region = Region.query.filter_by(tenant_id=tid, name="Default").first()
-                if not default_region:
-                    region_id_new = get_next_region_id(tid)
-                    default_region = Region(tenant_id=tid, region_id=region_id_new, name="Default", radius_km=30.0)
-                    db.session.add(default_region)
-                    db.session.flush()
-                region_id = default_region.region_id
-            
-            # create demo customer/location if needed
-            customer = Customer.query.filter_by(tenant_id=tid, email="demo@customer.local").first()
-            if not customer:
-                from .models import get_next_customer_id
-                customer_id = get_next_customer_id(tid)
-                customer = Customer(tenant_id=tid, customer_id=customer_id, name="Demo Customer", municipality="DemoTown", email="demo@customer.local")
-                db.session.add(customer)
+        # Ensure we have a valid region_id before creating location
+        if region_id is None:
+            # Create a default region if none exists
+            from .models import get_next_region_id
+            default_region = Region.query.filter_by(tenant_id=tid, name="Default").first()
+            if not default_region:
+                region_id_new = get_next_region_id(tid)
+                default_region = Region(tenant_id=tid, region_id=region_id_new, name="Default", radius_km=30.0)
+                db.session.add(default_region)
                 db.session.flush()
+            region_id = default_region.region_id
+        
+        # create demo customer/location if needed
+        customer = Customer.query.filter_by(tenant_id=tid, email="demo@customer.local").first()
+        if not customer:
+            from .models import get_next_customer_id
+            customer_id = get_next_customer_id(tid)
+            customer = Customer(tenant_id=tid, customer_id=customer_id, name="Demo Customer", municipality="DemoTown", email="demo@customer.local")
+            db.session.add(customer)
+            db.session.flush()
 
-            # Use address from form if provided for the initial demo location, otherwise use default.
-            location_address = address if address else "Demo Street 1"
-            loc = Location.query.filter_by(tenant_id=tid, name="Demo Store").first()
-            if not loc:
-                from .models import get_next_location_id
-                location_id = get_next_location_id(tid)
-                loc = Location(
-                    tenant_id=tid,
-                    location_id=location_id,
-                    name="Demo Store",
-                    address=location_address,
-                    region_id=region_id,
-                )
-                db.session.add(loc)
-                db.session.flush()
+        # Use address from form if provided for the initial demo location, otherwise use default.
+        location_address = address if address else "Demo Street 1"
+        loc = Location.query.filter_by(tenant_id=tid, name="Demo Store").first()
+        if not loc:
+            from .models import get_next_location_id
+            location_id = get_next_location_id(tid)
+            loc = Location(
+                tenant_id=tid,
+                location_id=location_id,
+                name="Demo Store",
+                address=location_address,
+                region_id=region_id,
+            )
+            db.session.add(loc)
+            db.session.flush()
 
-            # create a new order for this demo product
-            new_order_id = add_order(tenant_id=tid, customer_id=customer.customer_id, location_id=loc.location_id, seller_id=session["employee_id"], product_name=f"Imported {order_id}")
-            order_id = int(new_order_id)
-            current_app.logger.info(f"Created demo order {order_id} for scheduling (input product id).")
-        except Exception as e:
-            current_app.logger.exception(f"Failed to create demo order for schedule request: {e}")
-            flash(f"Kon geen order aanmaken voor deze levering: {str(e)}", "error")
-            return redirect(url_for("main.add_listing"))
+        # create a new order with the product description
+        new_order_id = add_order(tenant_id=tid, customer_id=customer.customer_id, location_id=loc.location_id, seller_id=session["employee_id"], product_name=product_description)
+        order_id = int(new_order_id)
+        current_app.logger.info(f"Created order {order_id} for scheduling with product: {product_description}")
+    except Exception as e:
+        current_app.logger.exception(f"Failed to create order for schedule request: {e}")
+        flash(f"Kon geen order aanmaken voor deze levering: {str(e)}", "error")
+        return redirect(url_for("main.add_listing"))
 
     try:
         delivery_id = upsert_run_and_attach_delivery_with_capacity(
