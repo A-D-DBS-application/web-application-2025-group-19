@@ -32,7 +32,7 @@
       <thead>
         <tr>
           <th>Gemeente</th>
-          <th>Product ID</th>
+          <th>Product Omschrijving</th>
           <th>Status</th>
           <th>Geplande Datum</th>
           <th class="text-center">Acties</th>
@@ -43,7 +43,7 @@
           <tr>
             <td class="font-medium">{{ listing.municipality or '—' }}</td>
             <td>
-              <code style="font-family: monospace; background: rgba(0,0,0,0.04); padding: 2px 6px; border-radius: 4px;">#{{ listing.product_id }}</code>
+              <span class="font-medium">{{ listing.product_description or '—' }}</span>
             </td>
             <td>
               <span class="badge {% if listing.status == 'scheduled' %}badge-primary{% elif listing.status == 'delivered' %}badge-success{% else %}badge-default{% endif %}">

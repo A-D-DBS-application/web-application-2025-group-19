@@ -245,13 +245,13 @@ def listings():
         items = []
         for row in rows:
             try:
-                # Unpack: delivery_id, product_id, region_name, status, order_date, scheduled_date, region_id
-                d_id, p_id, region_name, status, order_date, sched_date, r_id = row
+                # Unpack: delivery_id, product_name, region_name, status, order_date, scheduled_date, region_id
+                d_id, product_name, region_name, status, order_date, sched_date, r_id = row
 
-                # Build display info - show product_id instead of order_id
+                # Build display info - show product_name (description) instead of product_id
                 items.append({
                     "delivery_id": d_id,
-                    "product_id": p_id,
+                    "product_description": product_name or 'Onbekend product',  # Use product name/description
                     "municipality": region_name or 'N/A',
                     "status": str(status).split('.')[-1] if status else 'unknown',  # Extract enum value
                     "scheduled_date": sched_date
