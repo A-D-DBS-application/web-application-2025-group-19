@@ -602,6 +602,7 @@ def schedule():
     product_description = request.form.get("product_description", "").strip()
     address = request.form.get("address")
     region_name = request.form.get("region_id")  # Municipality name (optional)
+    municipality = request.form.get("municipality", "").strip()  # Gemeente invoerveld
     scheduled_date_str = request.form.get("scheduled_date")
     
     # Coördinaten uit hidden fields (gezet door frontend via Mapbox)
@@ -676,7 +677,7 @@ def schedule():
                     
                     if not found_available:
                         # Alle regio's vol, maak nieuwe regio
-                        region_name_new = region_name or f"Regio {scheduled_date.strftime('%d-%m-%Y')}"
+                        region_name_new = municipality or region_name or f"Regio {scheduled_date.strftime('%d-%m-%Y')}"
                         region_id, _ = create_new_region_with_address(tid, region_name_new, address, lat, lng, scheduled_date)
                         current_app.logger.info(f"Created new region {region_id} (all nearby regions full)")
                 else:
@@ -685,7 +686,7 @@ def schedule():
                     current_app.logger.info(f"Added address to nearest region {region_id}")
             else:
                 # Geen bestaande regio binnen 30km, maak nieuwe regio
-                region_name_new = region_name or f"Regio {scheduled_date.strftime('%d-%m-%Y')}"
+                region_name_new = municipality or region_name or f"Regio {scheduled_date.strftime('%d-%m-%Y')}"
                 region_id, _ = create_new_region_with_address(tid, region_name_new, address, lat, lng, scheduled_date)
                 current_app.logger.info(f"Created new region {region_id} (no nearby regions)")
     
