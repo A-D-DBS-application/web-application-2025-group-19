@@ -582,6 +582,10 @@ def add_driver():
         return redirect(url_for("main.drivers_list"))
 
     try:
+        # Commit employee first to ensure it exists before adding availability
+        # This is important for foreign key constraints
+        db.session.commit()
+        current_app.logger.info(f"Committed employee {first} {last} with ID {employee_id_val}")
         
         # Parse availability dates (comma-separated)
         availability_dates = []
@@ -598,22 +602,8 @@ def add_driver():
         if not availability_dates:
             availability_dates = [date.today()]
         
-        # Set availability for all selected dates (within the same transaction)
-        # Get base availability_id once to avoid duplicate IDs when creating multiple records
-        # Also account for records already in the session (not yet committed)
-        db_max_id = db.session.query(db.func.max(Availability.availability_id)).filter(
-            Availability.tenant_id == tid
-        ).scalar() or 0
-        
-        # Check for pending records in session that haven't been committed yet
-        session_max_id = db_max_id
-        for obj in db.session.new:
-            if isinstance(obj, Availability) and obj.tenant_id == tid:
-                if obj.availability_id and obj.availability_id > session_max_id:
-                    session_max_id = obj.availability_id
-        
-        base_availability_id = session_max_id + 1
-        availability_counter = 0
+        # Set availability for all selected dates
+        # Get next availability_id using the helper function
         availability_errors = []
         
         for availability_date in availability_dates:
@@ -624,25 +614,30 @@ def add_driver():
                 ).first()
                 
                 if existing:
+                    # Update existing record
                     existing.active = True
+                    current_app.logger.info(f"Updated existing availability for {first} {last} on {availability_date}")
                 else:
-                    # Use sequential IDs within this transaction to avoid duplicates
-                    availability_id = base_availability_id + availability_counter
-                    availability_counter += 1
+                    # Create new availability record
+                    availability_id = get_next_availability_id(tid)
                     
                     av = Availability(
-                        tenant_id=tid, availability_id=availability_id, employee_id=employee_id_val,
-                        available_date=availability_date, active=True
+                        tenant_id=tid, 
+                        availability_id=availability_id, 
+                        employee_id=employee_id_val,
+                        available_date=availability_date, 
+                        active=True
                     )
                     db.session.add(av)
+                    current_app.logger.info(f"Added new availability for {first} {last} on {availability_date} (ID: {availability_id})")
                 
-                current_app.logger.info(f"Added driver {first} {last} with availability for {availability_date}")
             except Exception as e:
                 current_app.logger.exception(f"Failed to set availability for {availability_date}: {e}")
                 availability_errors.append(str(availability_date))
         
+        # Commit all availability records
         if availability_errors:
-            db.session.commit()
+            db.session.commit()  # Commit what we can
             flash(f"Chauffeur {first} {last} toegevoegd, maar beschikbaarheid kon niet worden ingesteld voor: {', '.join(availability_errors)}", "warning")
             return redirect(url_for("main.drivers_list"))
         

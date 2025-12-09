@@ -30,7 +30,13 @@
         <span>Sleep Inn Scheduler</span>
       </a>
       
-      <div class="navbar-nav">
+      <button class="navbar-toggle" id="navbar-toggle" aria-label="Toggle navigation">
+        <svg class="navbar-toggle-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <path d="M3 12h18M3 6h18M3 18h18"/>
+        </svg>
+      </button>
+      
+      <div class="navbar-nav" id="navbar-nav">
         {% if session.username %}
           <a href="{{ url_for('main.index') }}" class="nav-link {% if request.endpoint == 'main.index' %}active{% endif %}">Dashboard</a>
           <a href="{{ url_for('main.add_listing') }}" class="nav-link {% if request.endpoint == 'main.add_listing' %}active{% endif %}">Nieuwe Levering</a>
@@ -85,7 +91,31 @@
   <script>
     const navbar = document.getElementById('navbar');
     const footer = document.querySelector('.footer');
+    const navbarToggle = document.getElementById('navbar-toggle');
+    const navbarNav = document.getElementById('navbar-nav');
     let lastScroll = 0;
+    
+    // Mobile menu toggle
+    if (navbarToggle && navbarNav) {
+      navbarToggle.addEventListener('click', () => {
+        navbarNav.classList.toggle('active');
+      });
+      
+      // Close menu when clicking outside
+      document.addEventListener('click', (e) => {
+        if (!navbar.contains(e.target) && navbarNav.classList.contains('active')) {
+          navbarNav.classList.remove('active');
+        }
+      });
+      
+      // Close menu when clicking a nav link
+      const navLinks = navbarNav.querySelectorAll('.nav-link');
+      navLinks.forEach(link => {
+        link.addEventListener('click', () => {
+          navbarNav.classList.remove('active');
+        });
+      });
+    }
     
     window.addEventListener('scroll', () => {
       const currentScroll = window.pageYOffset;
