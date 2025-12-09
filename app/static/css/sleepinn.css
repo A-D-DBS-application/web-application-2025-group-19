@@ -138,13 +138,14 @@ a:hover {
 }
 
 .navbar-inner {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
-  justify-content: space-between;
   height: 70px;
   padding: 0 var(--spacing-lg);
-  max-width: 1400px;
+  max-width: 1200px;
   margin: 0 auto;
+  gap: var(--spacing-lg);
 }
 
 .navbar-brand {
@@ -155,6 +156,7 @@ a:hover {
   font-size: 1.125rem;
   color: var(--color-black);
   text-decoration: none;
+  justify-self: start;
 }
 
 .navbar-brand:hover {
@@ -198,6 +200,7 @@ a:hover {
   display: flex;
   align-items: center;
   gap: var(--spacing-xs);
+  justify-self: start;
 }
 
 .nav-link {
@@ -776,6 +779,7 @@ textarea.form-input {
   display: flex;
   align-items: center;
   gap: var(--spacing-md);
+  justify-self: end;
 }
 
 .user-name {
