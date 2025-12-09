@@ -128,13 +128,13 @@ a:hover {
   right: 0;
   z-index: 1000;
   background: #FAF8F3;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
   transition: all var(--transition-normal);
 }
 
 .navbar.scrolled {
   background: var(--color-navy);
   box-shadow: var(--shadow-md);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .navbar-inner {
@@ -229,7 +229,7 @@ a:hover {
 
 .nav-link.active {
   color: var(--color-navy);
-  background: rgba(27, 38, 59, 0.08);
+  background: rgba(126, 184, 218, 0.18);
 }
 
 .nav-link.active::after {
@@ -314,7 +314,7 @@ a:hover {
 
 .btn-sm {
   padding: 0.375rem 0.875rem;
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
 }
 
 .btn-lg {
