@@ -73,7 +73,7 @@ body {
   font-size: 16px;
   line-height: 1.6;
   color: var(--color-dark-gray);
-  background: linear-gradient(135deg, var(--color-light-sand) 0%, #F0EAE0 50%, var(--color-light-sand) 100%);
+  background: linear-gradient(135deg, #FAF8F3 0%, #F7F3EC 50%, #FAF8F3 100%);
   background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -127,7 +127,7 @@ a:hover {
   left: 0;
   right: 0;
   z-index: 1000;
-  background: var(--color-white);
+  background: #FAF8F3;
   border-bottom: 1px solid rgba(0, 0, 0, 0.05);
   transition: all var(--transition-normal);
 }
@@ -505,30 +505,12 @@ textarea.form-input {
   border-radius: var(--radius-lg);
   padding: var(--spacing-lg);
   transition: all var(--transition-normal);
-  position: relative;
-  overflow: hidden;
   box-shadow: 0 1px 3px rgba(126, 184, 218, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
-.stat-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 3px;
-  height: 100%;
-  background: rgba(126, 184, 218, 0.3);
-  transition: background var(--transition-normal);
-}
-
 .stat-card:hover {
+  border-color: rgba(126, 184, 218, 0.4);
   box-shadow: 0 4px 12px rgba(126, 184, 218, 0.15), 0 2px 4px rgba(0, 0, 0, 0.05);
-  transform: translateY(-2px);
-  border-color: rgba(126, 184, 218, 0.45);
-}
-
-.stat-card:hover::before {
-  background: var(--color-sky-accent);
 }
 
 .stat-card-label {
