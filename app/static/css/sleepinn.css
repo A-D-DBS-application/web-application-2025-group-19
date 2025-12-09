@@ -223,15 +223,7 @@ a:hover {
 }
 
 .nav-link.active::after {
-  content: '';
-  position: absolute;
-  bottom: 4px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 20px;
-  height: 2px;
-  background: var(--color-sky-accent);
-  border-radius: 1px;
+  content: none;
 }
 
 .navbar.scrolled .nav-link.active {
@@ -240,7 +232,7 @@ a:hover {
 }
 
 .navbar.scrolled .nav-link.active::after {
-  background: var(--color-sky-accent);
+  content: none;
 }
 
 /* === BUTTONS === */
