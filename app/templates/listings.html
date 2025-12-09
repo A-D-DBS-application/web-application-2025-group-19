@@ -28,6 +28,7 @@
 
 {% if listings %}
   <div class="table-container">
+    <!-- Desktop table view -->
     <table class="table">
       <thead>
         <tr>
@@ -66,6 +67,45 @@
         {% endfor %}
       </tbody>
     </table>
+    
+    <!-- Mobile card view -->
+    <div class="table-mobile-view" style="display: none;">
+      {% for listing in listings %}
+        <div class="table-mobile-card">
+          <div class="table-mobile-row">
+            <div class="table-mobile-label">Gemeente</div>
+            <div class="table-mobile-value font-medium">{{ listing.municipality or '—' }}</div>
+          </div>
+          <div class="table-mobile-row">
+            <div class="table-mobile-label">Product Omschrijving</div>
+            <div class="table-mobile-value font-medium">{{ listing.product_description or '—' }}</div>
+          </div>
+          <div class="table-mobile-row">
+            <div class="table-mobile-label">Status</div>
+            <div class="table-mobile-value">
+              <span class="badge {% if listing.status == 'scheduled' %}badge-primary{% elif listing.status == 'delivered' %}badge-success{% else %}badge-default{% endif %}">
+                {{ listing.status }}
+              </span>
+            </div>
+          </div>
+          <div class="table-mobile-row">
+            <div class="table-mobile-label">Geplande Datum</div>
+            <div class="table-mobile-value">
+              {% if listing.scheduled_date %}
+                {{ listing.scheduled_date.strftime('%d-%m-%Y') }}
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </div>
+          </div>
+          <div class="table-mobile-row" style="border-bottom: none; padding-top: var(--spacing-md);">
+            <form method="POST" action="{{ url_for('main.delete_delivery', delivery_id=listing.delivery_id) }}" onsubmit="return confirm('Weet je zeker dat je deze levering wilt verwijderen?');">
+              <button type="submit" class="btn btn-danger btn-block">Verwijderen</button>
+            </form>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
     <div class="card-footer">
       <p class="text-small text-muted">Totaal: <strong>{{ listings | length }}</strong> levering{% if listings | length != 1 %}en{% endif %}</p>
     </div>
@@ -84,6 +124,19 @@
 {% endif %}
 
 <script>
+  // Show mobile view on mobile devices
+  if (window.innerWidth <= 768) {
+    const tableContainers = document.querySelectorAll('.table-container');
+    tableContainers.forEach(container => {
+      const table = container.querySelector('.table');
+      const mobileView = container.querySelector('.table-mobile-view');
+      if (table && mobileView) {
+        table.style.display = 'none';
+        mobileView.style.display = 'block';
+      }
+    });
+  }
+  
   // Google Calendar link - direct toevoegen
   const googleCalendarLink = document.getElementById('google-calendar-link');
   
