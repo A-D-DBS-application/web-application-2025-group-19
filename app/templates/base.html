@@ -81,9 +81,10 @@
     </div>
   </footer>
 
-  <!-- Navbar Scroll Effect -->
+  <!-- Navbar & Footer Scroll Effect -->
   <script>
     const navbar = document.getElementById('navbar');
+    const footer = document.querySelector('.footer');
     let lastScroll = 0;
     
     window.addEventListener('scroll', () => {
@@ -91,8 +92,10 @@
       
       if (currentScroll > 50) {
         navbar.classList.add('scrolled');
+        if (footer) footer.classList.add('scrolled');
       } else {
         navbar.classList.remove('scrolled');
+        if (footer) footer.classList.remove('scrolled');
       }
       
       lastScroll = currentScroll;

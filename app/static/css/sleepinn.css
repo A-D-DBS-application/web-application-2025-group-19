@@ -1,6 +1,6 @@
 /* ============================================
    SLEEP INN DESIGN SYSTEM
-   Premium, rustige, luxe hotel-stijl
+   Premium, rustig
    ============================================ */
 
 /* === CSS VARIABELEN === */
@@ -78,6 +78,8 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 /* === TYPOGRAPHY === */
@@ -116,7 +118,7 @@ a:hover {
 }
 
 .page-wrapper {
-  min-height: calc(100vh - 140px);
+  flex: 1;
   padding: var(--spacing-xl) 0;
 }
 
@@ -572,12 +574,18 @@ textarea.form-input {
 
 /* === FOOTER === */
 .footer {
-  background: var(--color-navy);
-  color: rgba(255, 255, 255, 0.7);
+  background: #FAF8F3;
+  color: var(--color-medium-gray);
   padding: var(--spacing-lg) 0;
   font-size: 0.875rem;
   text-align: center;
   margin-top: auto;
+  transition: all var(--transition-normal);
+}
+
+.footer.scrolled {
+  background: var(--color-navy);
+  color: rgba(255, 255, 255, 0.7);
 }
 
 /* === UTILITIES === */
