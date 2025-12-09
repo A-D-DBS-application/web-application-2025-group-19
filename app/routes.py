@@ -15,6 +15,7 @@ from .models import (
     get_next_truck_id, get_next_employee_id, get_next_availability_id, get_capacity_info_for_date, count_available_drivers_for_date,
     count_available_trucks, count_active_regions_for_date
 )
+from sqlalchemy import text
 
 # Mapbox API configuratie - wordt uit config geladen
 def get_mapbox_token():
@@ -69,6 +70,15 @@ def index():
     next_week_end = today + timedelta(days=14)
     
     try:
+        # Normalize employee id to use for availability operations
+        if existing_emp:
+            employee_id_val = existing_emp.employee_id
+        else:
+            # either ORM-created `emp` or raw-insert created_employee_id
+            if 'emp' in locals():
+                employee_id_val = emp.employee_id
+            else:
+                employee_id_val = created_employee_id
         # 1. Geplande leveringen deze week
         deliveries_this_week = db.session.query(db.func.count(Delivery.delivery_id)).filter(
             Delivery.tenant_id == tid,
@@ -313,18 +323,58 @@ def register():
         flash("E-mailadres bestaat al.", "error")
         return redirect(url_for("main.register"))
 
-    from .models import get_next_employee_id
-    next_emp_id = get_next_employee_id(tid)
-    
-    emp = Employee(
-        tenant_id=tid, employee_id=next_emp_id, first_name=first, last_name=last,
-        email=email, role=EmployeeRole.seller, active=True
-    )
-    db.session.add(emp)
-    db.session.flush()  # krijg id (auto-increment)
-    session["employee_id"] = emp.employee_id
-    session["username"] = f"{emp.first_name}.{emp.last_name}".lower()
-    db.session.commit()
+    # Generate next employee_id for this tenant
+    max_emp_id = db.session.query(db.func.max(Employee.employee_id)).filter(
+        Employee.tenant_id == tid
+    ).scalar() or 0
+    next_emp_id = max_emp_id + 1
+
+    # If using SQLite, use ORM insertion; if Postgres (Identity column exists),
+    # use raw INSERT with OVERRIDING SYSTEM VALUE to allow explicit employee_id insertion.
+    db_uri = current_app.config.get("SQLALCHEMY_DATABASE_URI", "") or ""
+    if db_uri.startswith("sqlite:"):
+        emp = Employee(
+            tenant_id=tid,
+            employee_id=next_emp_id,
+            first_name=first,
+            last_name=last,
+            email=email,
+            role=EmployeeRole.seller,
+            active=True
+        )
+        db.session.add(emp)
+        db.session.flush()
+        session["employee_id"] = emp.employee_id
+        session["username"] = f"{emp.first_name}.{emp.last_name}".lower()
+        db.session.commit()
+    else:
+        # Postgres path: execute raw insert with OVERRIDING SYSTEM VALUE
+        sql = text("""
+        INSERT INTO employee (tenant_id, employee_id, location_id, first_name, last_name, email, role, active)
+        VALUES (:tenant_id, :employee_id, :location_id, :first_name, :last_name, :email, :role, :active)
+        OVERRIDING SYSTEM VALUE
+        RETURNING id, employee_id, first_name, last_name
+        """)
+        params = {
+            "tenant_id": tid,
+            "employee_id": next_emp_id,
+            "location_id": None,
+            "first_name": first,
+            "last_name": last,
+            "email": email,
+            "role": EmployeeRole.seller.value if hasattr(EmployeeRole, 'seller') else 'seller',
+            "active": True,
+        }
+        result = db.session.execute(sql, params)
+        row = result.fetchone()
+        if row is None:
+            db.session.rollback()
+            flash("Kon account niet aanmaken (databasefout).", "error")
+            return redirect(url_for("main.register"))
+        # row: (id, employee_id, first_name, last_name)
+        db.session.commit()
+        session["employee_id"] = row[1]
+        session["username"] = f"{row[2]}.{row[3]}".lower()
 
     flash("Account aangemaakt en ingelogd.", "success")
     return redirect(url_for("main.index"))
@@ -486,12 +536,41 @@ def add_driver():
     else:
         # Email doesn't exist: create new employee
         next_emp_id = get_next_employee_id(tid)
-        emp = Employee(
-            tenant_id=tid, employee_id=next_emp_id, first_name=first, last_name=last, email=email,
-            role=EmployeeRole.driver, active=True
-        )
-        db.session.add(emp)
-        db.session.flush()  # Get the id before commit
+        db_uri = current_app.config.get("SQLALCHEMY_DATABASE_URI", "") or ""
+        if db_uri.startswith("sqlite:"):
+            emp = Employee(
+                tenant_id=tid, employee_id=next_emp_id, first_name=first, last_name=last, email=email,
+                role=EmployeeRole.driver, active=True
+            )
+            db.session.add(emp)
+            db.session.flush()  # Get the id before commit
+            created_employee_id = emp.employee_id
+        else:
+            # Postgres: insert with OVERRIDING SYSTEM VALUE
+            sql = text("""
+            INSERT INTO employee (tenant_id, employee_id, location_id, first_name, last_name, email, role, active)
+            VALUES (:tenant_id, :employee_id, :location_id, :first_name, :last_name, :email, :role, :active)
+            OVERRIDING SYSTEM VALUE
+            RETURNING id, employee_id
+            """)
+            params = {
+                "tenant_id": tid,
+                "employee_id": next_emp_id,
+                "location_id": None,
+                "first_name": first,
+                "last_name": last,
+                "email": email,
+                "role": EmployeeRole.driver.value if hasattr(EmployeeRole, 'driver') else 'driver',
+                "active": True,
+            }
+            res = db.session.execute(sql, params)
+            row = res.fetchone()
+            if row is None:
+                db.session.rollback()
+                flash("Kon chauffeur niet toevoegen (databasefout).", "error")
+                return redirect(url_for("main.drivers_list"))
+            db.session.flush()
+            created_employee_id = row[1]
 
     try:
         
@@ -532,7 +611,7 @@ def add_driver():
             try:
                 # Check if availability already exists
                 existing = Availability.query.filter_by(
-                    tenant_id=tid, employee_id=emp.employee_id, available_date=availability_date
+                    tenant_id=tid, employee_id=employee_id_val, available_date=availability_date
                 ).first()
                 
                 if existing:
@@ -543,7 +622,7 @@ def add_driver():
                     availability_counter += 1
                     
                     av = Availability(
-                        tenant_id=tid, availability_id=availability_id, employee_id=emp.employee_id,
+                        tenant_id=tid, availability_id=availability_id, employee_id=employee_id_val,
                         available_date=availability_date, active=True
                     )
                     db.session.add(av)
@@ -1499,3 +1578,83 @@ def export_my_schedule_ical():
         return redirect(url_for("main.login"))
     
     return redirect(url_for("main.export_driver_schedule_ical", employee_id=session["employee_id"]))
+
+
+# --- Region Settings API ---
+@main.route("/api/region-settings", methods=["GET"])
+def get_region_settings():
+    """
+    Haal de huidige regio-instellingen op (tenant defaults).
+    """
+    if "employee_id" not in session:
+        return jsonify({"error": "Niet ingelogd"}), 401
+    
+    tid = tenant_id()
+    tenant = Tenant.query.get(tid)
+    
+    if not tenant:
+        return jsonify({"error": "Tenant niet gevonden"}), 404
+    
+    return jsonify({
+        "radius_km": tenant.default_radius_km or 30.0,
+        "max_deliveries_per_day": tenant.default_max_deliveries or 13
+    })
+
+
+@main.route("/api/region-settings", methods=["POST"])
+def update_region_settings():
+    """
+    Update de regio-instellingen (tenant defaults).
+    Kan ook alle bestaande regio's bijwerken indien gewenst.
+    """
+    if "employee_id" not in session:
+        return jsonify({"error": "Niet ingelogd"}), 401
+    
+    tid = tenant_id()
+    tenant = Tenant.query.get(tid)
+    
+    if not tenant:
+        return jsonify({"error": "Tenant niet gevonden"}), 404
+    
+    data = request.get_json() or {}
+    
+    # Valideer waarden
+    radius_km = data.get("radius_km")
+    max_deliveries = data.get("max_deliveries_per_day")
+    update_existing = data.get("update_existing_regions", False)
+    
+    if radius_km is not None:
+        try:
+            radius_km = float(radius_km)
+            if radius_km < 1 or radius_km > 500:
+                return jsonify({"error": "Straal moet tussen 1 en 500 km zijn"}), 400
+            tenant.default_radius_km = radius_km
+        except (ValueError, TypeError):
+            return jsonify({"error": "Ongeldige straal waarde"}), 400
+    
+    if max_deliveries is not None:
+        try:
+            max_deliveries = int(max_deliveries)
+            if max_deliveries < 1 or max_deliveries > 100:
+                return jsonify({"error": "Max leveringen moet tussen 1 en 100 zijn"}), 400
+            tenant.default_max_deliveries = max_deliveries
+        except (ValueError, TypeError):
+            return jsonify({"error": "Ongeldige max leveringen waarde"}), 400
+    
+    # Update ook alle bestaande regio's indien gewenst
+    if update_existing:
+        regions = Region.query.filter_by(tenant_id=tid).all()
+        for region in regions:
+            if radius_km is not None:
+                region.radius_km = radius_km
+            if max_deliveries is not None:
+                region.max_deliveries_per_day = max_deliveries
+    
+    db.session.commit()
+    
+    return jsonify({
+        "success": True,
+        "radius_km": tenant.default_radius_km,
+        "max_deliveries_per_day": tenant.default_max_deliveries,
+        "regions_updated": len(regions) if update_existing else 0
+    })

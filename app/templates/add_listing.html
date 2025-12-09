@@ -119,24 +119,73 @@
 
   <!-- Zijbalk -->
   <div>
-    <div class="card mb-4">
-      <div class="card-header">
+    <div class="card mb-4" id="region-settings-card">
+      <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
         <h3 class="font-semibold">Regio Regels</h3>
+        <button type="button" id="edit-settings-btn" class="btn-icon" title="Instellingen bewerken" style="padding: 4px 8px; background: transparent; border: none; cursor: pointer; opacity: 0.6; transition: opacity 0.2s;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+          </svg>
+        </button>
       </div>
       <div class="card-body">
-        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+        <!-- View Mode -->
+        <div id="settings-view-mode" style="display: flex; flex-direction: column; gap: 0.75rem;">
           <div class="flex items-center gap-2">
-            <span style="color: var(--color-success);">•</span>
-            <span class="text-small"><strong>Straal:</strong> 30 km vanaf centrum</span>
+            <span style="color: var(--color-navy, #1B263B);">•</span>
+            <span class="text-small"><strong>Straal:</strong> <span id="radius-display">30</span> km vanaf centrum</span>
           </div>
           <div class="flex items-center gap-2">
-            <span style="color: var(--color-success);">•</span>
-            <span class="text-small"><strong>Max leveringen:</strong> 13 per dag per regio</span>
+            <span style="color: var(--color-navy, #1B263B);">•</span>
+            <span class="text-small"><strong>Max leveringen:</strong> <span id="max-deliveries-display">13</span> per dag per regio</span>
           </div>
           <div class="flex items-center gap-2">
-            <span style="color: var(--color-success);">•</span>
+            <span style="color: var(--color-navy, #1B263B);">•</span>
             <span class="text-small"><strong>Centrum:</strong> Wordt herberekend per nieuw adres</span>
           </div>
+        </div>
+        
+        <!-- Edit Mode -->
+        <div id="settings-edit-mode" style="display: none; flex-direction: column; gap: 1rem;">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="radius-input" class="settings-label">Straal (km)</label>
+            <div class="slider-container">
+              <input type="range" id="radius-slider" min="5" max="100" value="30" class="premium-slider">
+              <div class="number-input-wrapper">
+                <input type="number" id="radius-input" min="1" max="500" value="30" class="premium-number-input">
+                <span class="input-unit">km</span>
+              </div>
+            </div>
+          </div>
+          
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="max-deliveries-input" class="settings-label">Max leveringen per dag</label>
+            <div class="slider-container">
+              <input type="range" id="max-deliveries-slider" min="1" max="50" value="13" class="premium-slider">
+              <div class="number-input-wrapper">
+                <input type="number" id="max-deliveries-input" min="1" max="100" value="13" class="premium-number-input">
+              </div>
+            </div>
+          </div>
+          
+          <label class="premium-checkbox">
+            <input type="checkbox" id="update-existing-checkbox">
+            <span class="checkbox-custom"></span>
+            <span class="checkbox-label">Ook bestaande regio's bijwerken</span>
+          </label>
+          
+          <div style="display: flex; gap: 0.5rem; margin-top: 0.25rem;">
+            <button type="button" id="save-settings-btn" class="btn-premium-save">Opslaan</button>
+            <button type="button" id="cancel-settings-btn" class="btn-premium-cancel">
+              Annuleren
+            </button>
+          </div>
+        </div>
+        
+        <!-- Success Message -->
+        <div id="settings-success" class="settings-success-msg">
+          ✓ Opgeslagen
         </div>
       </div>
     </div>
@@ -145,6 +194,218 @@
 </div>
 
 <style>
+  /* ========== SETTINGS STYLES ========== */
+  .settings-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: var(--color-navy, #1B263B);
+  }
+  
+  .slider-container {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  
+  .premium-slider {
+    flex: 1;
+    height: 4px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: var(--color-navy, #1B263B);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+  
+  .premium-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    background: var(--color-navy, #1B263B);
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid white;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  }
+  
+  .premium-slider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    background: var(--color-navy, #1B263B);
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid white;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  }
+  
+  .premium-slider::-moz-range-track {
+    background: var(--color-navy, #1B263B);
+    border-radius: 2px;
+    height: 4px;
+  }
+  
+  .number-input-wrapper {
+    display: flex;
+    align-items: center;
+    background: white;
+    border: 1px solid var(--color-border, #ddd);
+    border-radius: 6px;
+    padding: 0 0.5rem;
+  }
+  
+  .number-input-wrapper:focus-within {
+    border-color: var(--color-navy, #1B263B);
+  }
+  
+  .premium-number-input {
+    width: 45px;
+    padding: 0.375rem 0.25rem;
+    border: none;
+    background: transparent;
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-align: center;
+    color: var(--color-navy, #1B263B);
+    outline: none;
+  }
+  
+  .premium-number-input::-webkit-outer-spin-button,
+  .premium-number-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  
+  .premium-number-input[type=number] {
+    -moz-appearance: textfield;
+  }
+  
+  .input-unit {
+    font-size: 0.75rem;
+    color: var(--color-muted, #666);
+  }
+  
+  /* Checkbox */
+  .premium-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    padding: 0.5rem 0;
+  }
+  
+  .premium-checkbox input {
+    display: none;
+  }
+  
+  .checkbox-custom {
+    width: 16px;
+    height: 16px;
+    border: 1.5px solid var(--color-navy, #1B263B);
+    border-radius: 3px;
+    position: relative;
+    background: white;
+  }
+  
+  .premium-checkbox input:checked + .checkbox-custom {
+    background: var(--color-navy, #1B263B);
+  }
+  
+  .checkbox-custom::after {
+    content: '';
+    position: absolute;
+    left: 4px;
+    top: 1px;
+    width: 5px;
+    height: 8px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg) scale(0);
+    transition: transform 0.15s ease;
+  }
+  
+  .premium-checkbox input:checked + .checkbox-custom::after {
+    transform: rotate(45deg) scale(1);
+  }
+  
+  .checkbox-label {
+    font-size: 0.75rem;
+    color: var(--color-muted, #666);
+  }
+  
+  /* Buttons */
+  .btn-premium-save {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: white;
+    background: var(--color-navy, #1B263B);
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: opacity 0.2s ease;
+  }
+  
+  .btn-premium-save:hover {
+    opacity: 0.9;
+  }
+  
+  .btn-premium-cancel {
+    padding: 0.5rem 1rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--color-muted, #666);
+    background: white;
+    border: 1px solid var(--color-border, #ddd);
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  
+  .btn-premium-cancel:hover {
+    background: #f5f5f5;
+  }
+  
+  /* Success Message */
+  .settings-success-msg {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    padding: 0.5rem;
+    margin-top: 0.5rem;
+    background: rgba(16, 185, 129, 0.15);
+    border-radius: 6px;
+    font-size: 0.75rem;
+    color: #065F46;
+    font-weight: 500;
+  }
+  
+  /* Edit Button */
+  #edit-settings-btn {
+    padding: 4px 8px !important;
+    background: transparent !important;
+    border: none !important;
+    color: var(--color-muted, #666) !important;
+    opacity: 0.6 !important;
+    transition: opacity 0.2s ease !important;
+  }
+  
+  #edit-settings-btn:hover {
+    opacity: 1 !important;
+    color: var(--color-navy, #1B263B) !important;
+  }
+  
+  /* ========== CALENDAR STYLES ========== */
   .calendar-day {
     aspect-ratio: 1;
     display: flex;
@@ -735,5 +996,152 @@
         };
       });
   }
+
+  // ========== REGION SETTINGS FUNCTIONALITY ==========
+  const editSettingsBtn = document.getElementById('edit-settings-btn');
+  const saveSettingsBtn = document.getElementById('save-settings-btn');
+  const cancelSettingsBtn = document.getElementById('cancel-settings-btn');
+  const viewMode = document.getElementById('settings-view-mode');
+  const editMode = document.getElementById('settings-edit-mode');
+  const successMsg = document.getElementById('settings-success');
+  
+  const radiusSlider = document.getElementById('radius-slider');
+  const radiusInput = document.getElementById('radius-input');
+  const radiusDisplay = document.getElementById('radius-display');
+  const maxDeliveriesSlider = document.getElementById('max-deliveries-slider');
+  const maxDeliveriesInput = document.getElementById('max-deliveries-input');
+  const maxDeliveriesDisplay = document.getElementById('max-deliveries-display');
+  const updateExistingCheckbox = document.getElementById('update-existing-checkbox');
+  
+  // Sync sliders with inputs
+  radiusSlider.addEventListener('input', () => {
+    radiusInput.value = radiusSlider.value;
+  });
+  radiusInput.addEventListener('input', () => {
+    const val = Math.min(500, Math.max(1, radiusInput.value));
+    if (val <= 100) radiusSlider.value = val;
+  });
+  
+  maxDeliveriesSlider.addEventListener('input', () => {
+    maxDeliveriesInput.value = maxDeliveriesSlider.value;
+  });
+  maxDeliveriesInput.addEventListener('input', () => {
+    const val = Math.min(100, Math.max(1, maxDeliveriesInput.value));
+    if (val <= 50) maxDeliveriesSlider.value = val;
+  });
+  
+  // Load current settings on page load
+  async function loadRegionSettings() {
+    try {
+      const response = await fetch('/api/region-settings');
+      if (response.ok) {
+        const data = await response.json();
+        radiusDisplay.textContent = data.radius_km;
+        maxDeliveriesDisplay.textContent = data.max_deliveries_per_day;
+        radiusSlider.value = Math.min(100, data.radius_km);
+        radiusInput.value = data.radius_km;
+        maxDeliveriesSlider.value = Math.min(50, data.max_deliveries_per_day);
+        maxDeliveriesInput.value = data.max_deliveries_per_day;
+      }
+    } catch (error) {
+      console.error('Failed to load region settings:', error);
+    }
+  }
+  
+  // Toggle edit mode
+  editSettingsBtn.addEventListener('click', () => {
+    viewMode.style.display = 'none';
+    editMode.style.display = 'flex';
+    successMsg.style.display = 'none';
+    editSettingsBtn.style.display = 'none';
+  });
+  
+  // Cancel edit
+  cancelSettingsBtn.addEventListener('click', () => {
+    viewMode.style.display = 'flex';
+    editMode.style.display = 'none';
+    editSettingsBtn.style.display = 'block';
+    // Reset values to current display values
+    radiusSlider.value = Math.min(100, parseFloat(radiusDisplay.textContent));
+    radiusInput.value = radiusDisplay.textContent;
+    maxDeliveriesSlider.value = Math.min(50, parseInt(maxDeliveriesDisplay.textContent));
+    maxDeliveriesInput.value = maxDeliveriesDisplay.textContent;
+  });
+  
+  // Save settings
+  saveSettingsBtn.addEventListener('click', async () => {
+    const radius = parseFloat(radiusInput.value);
+    const maxDeliveries = parseInt(maxDeliveriesInput.value);
+    const updateExisting = updateExistingCheckbox.checked;
+    
+    // Validate
+    if (radius < 1 || radius > 500) {
+      alert('Straal moet tussen 1 en 500 km zijn');
+      return;
+    }
+    if (maxDeliveries < 1 || maxDeliveries > 100) {
+      alert('Max leveringen moet tussen 1 en 100 zijn');
+      return;
+    }
+    
+    saveSettingsBtn.disabled = true;
+    saveSettingsBtn.innerHTML = '<span class="spinner" style="width: 14px; height: 14px; border-width: 2px; margin-right: 4px;"></span>Opslaan...';
+    
+    try {
+      const response = await fetch('/api/region-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          radius_km: radius,
+          max_deliveries_per_day: maxDeliveries,
+          update_existing_regions: updateExisting
+        })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        
+        // Update display values
+        radiusDisplay.textContent = data.radius_km;
+        maxDeliveriesDisplay.textContent = data.max_deliveries_per_day;
+        
+        // Show success and switch back to view mode
+        viewMode.style.display = 'flex';
+        editMode.style.display = 'none';
+        editSettingsBtn.style.display = 'block';
+        successMsg.style.display = 'flex';
+        
+        // Hide success message after 3 seconds
+        setTimeout(() => {
+          successMsg.style.display = 'none';
+        }, 3000);
+        
+        // If regions were updated, refresh suggestions
+        if (data.regions_updated > 0 && currentLat && currentLng) {
+          fetchDateSuggestions(currentLat, currentLng);
+        }
+      } else {
+        const error = await response.json();
+        alert(error.error || 'Kon instellingen niet opslaan');
+      }
+    } catch (error) {
+      console.error('Failed to save settings:', error);
+      alert('Er is een fout opgetreden bij het opslaan');
+    } finally {
+      saveSettingsBtn.disabled = false;
+      saveSettingsBtn.innerHTML = 'Opslaan';
+    }
+  });
+  
+  // Hover effect for edit button
+  editSettingsBtn.addEventListener('mouseenter', () => {
+    editSettingsBtn.style.opacity = '1';
+  });
+  editSettingsBtn.addEventListener('mouseleave', () => {
+    editSettingsBtn.style.opacity = '0.6';
+  });
+  
+  // Load settings when page loads
+  loadRegionSettings();
 </script>
 {% endblock %}

@@ -83,6 +83,9 @@ class Tenant(db.Model):
     industry     = db.Column(db.String(100), default="retail")
     contact_email= db.Column(db.String(150))
     created_at   = db.Column(db.DateTime, default=datetime.utcnow)
+    # Default regio-instellingen voor nieuwe regio's
+    default_radius_km = db.Column(db.Float, default=30.0)
+    default_max_deliveries = db.Column(db.Integer, default=13)
 
 # --- region (PK: tenant_id, region_id) ---
 class Region(db.Model):
@@ -94,6 +97,7 @@ class Region(db.Model):
     center_lat = db.Column(db.Float, nullable=True)  # Latitude van centrum
     center_lng = db.Column(db.Float, nullable=True)  # Longitude van centrum
     radius_km  = db.Column(db.Float, default=30.0)   # Straal in kilometers (standaard 30km)
+    max_deliveries_per_day = db.Column(db.Integer, default=13)  # Max leveringen per dag per regio
     __table_args__ = (
         ForeignKeyConstraint(["tenant_id"], ["tenant.tenant_id"], ondelete="CASCADE"),
         UniqueConstraint("tenant_id", "name", name="uq_region_tenant_name"),
@@ -675,13 +679,19 @@ def count_deliveries_for_region_date(tenant_id: int, region_id: int, scheduled_d
     return count
 
 
-def get_available_dates_for_region(tenant_id: int, region_id: int, max_deliveries: int = 13, days_ahead: int = 30):
+def get_available_dates_for_region(tenant_id: int, region_id: int, max_deliveries: int = None, days_ahead: int = 30):
     """
     Krijg beschikbare datums voor een regio (datums met minder dan max_deliveries).
+    Als max_deliveries niet is opgegeven, wordt de waarde uit de regio gehaald.
     """
     from datetime import timedelta
     today = date.today()
     available_dates = []
+    
+    # Haal max_deliveries uit regio als niet opgegeven
+    if max_deliveries is None:
+        region = Region.query.filter_by(tenant_id=tenant_id, region_id=region_id).first()
+        max_deliveries = region.max_deliveries_per_day if region else 13
     
     for i in range(days_ahead):
         check_date = today + timedelta(days=i)
@@ -740,7 +750,13 @@ def add_address_to_region(tenant_id: int, region_id: int, address: str, lat: flo
 def create_new_region_with_address(tenant_id: int, region_name: str, address: str, lat: float, lng: float, scheduled_date: date):
     """
     Maak een nieuwe regio aan met het adres als centrum.
+    Gebruikt de tenant defaults voor radius_km en max_deliveries_per_day.
     """
+    # Haal tenant defaults op
+    tenant = Tenant.query.get(tenant_id)
+    default_radius = tenant.default_radius_km if tenant else 30.0
+    default_max_deliveries = tenant.default_max_deliveries if tenant else 13
+    
     # Maak nieuwe regio
     region_id = get_next_region_id(tenant_id)
     new_region = Region(
@@ -749,7 +765,8 @@ def create_new_region_with_address(tenant_id: int, region_name: str, address: st
         name=region_name,
         center_lat=lat,
         center_lng=lng,
-        radius_km=30.0
+        radius_km=default_radius,
+        max_deliveries_per_day=default_max_deliveries
     )
     db.session.add(new_region)
     db.session.flush()
@@ -892,7 +909,7 @@ def get_capacity_info_for_date(tenant_id: int, check_date: date) -> dict:
     }
 
 
-def get_suggested_dates_for_address(tenant_id: int, lat: float, lng: float, max_deliveries: int = 13, days_ahead: int = 30):
+def get_suggested_dates_for_address(tenant_id: int, lat: float, lng: float, days_ahead: int = 30):
     """
     Geef datum suggesties voor een adres gebaseerd op bestaande regio's.
     
@@ -900,11 +917,11 @@ def get_suggested_dates_for_address(tenant_id: int, lat: float, lng: float, max_
     1) Er minstens één chauffeur beschikbaar is op die dag
     2) Het aantal regio's die dag NIET groter is dan het aantal beschikbare trucks
     3) Het aantal leveringen die dag NIET groter is dan het aantal beschikbare chauffeurs
-    4) De regio nog < max_deliveries heeft
+    4) De regio nog < max_deliveries_per_day heeft (per regio instelling)
     """
     from datetime import timedelta
     
-    # Vind regio's binnen 30km
+    # Vind regio's binnen hun eigen radius_km
     matching_regions = find_matching_regions(tenant_id, lat, lng)
     
     if not matching_regions:
@@ -919,6 +936,8 @@ def get_suggested_dates_for_address(tenant_id: int, lat: float, lng: float, max_
     for match in matching_regions:
         region = match["region"]
         distance = match["distance_km"]
+        # Gebruik de max_deliveries_per_day van de specifieke regio
+        region_max_deliveries = region.max_deliveries_per_day or 13
         
         # Check beschikbare datums voor deze regio
         for i in range(days_ahead):
@@ -938,14 +957,14 @@ def get_suggested_dates_for_address(tenant_id: int, lat: float, lng: float, max_
             # Check regio-specifieke leveringslimiet
             delivery_count = count_deliveries_for_region_date(tenant_id, region.region_id, check_date)
             
-            if delivery_count < max_deliveries:
+            if delivery_count < region_max_deliveries:
                 suggestions.append({
                     "date": date_str,
                     "region_id": region.region_id,
                     "region_name": region.name,
                     "distance_km": distance,
                     "delivery_count": delivery_count,
-                    "spots_left": max_deliveries - delivery_count,
+                    "spots_left": region_max_deliveries - delivery_count,
                     # Extra capaciteitsinfo
                     "available_drivers": capacity_info["available_drivers"],
                     "available_trucks": capacity_info["available_trucks"],
