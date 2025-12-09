@@ -441,9 +441,13 @@
     background: rgba(16, 185, 129, 0.15);
     color: #065F46;
     font-weight: 500;
+    -webkit-tap-highlight-color: rgba(16, 185, 129, 0.3);
+    touch-action: manipulation; /* Better touch response */
+    user-select: none; /* Prevent text selection on mobile */
   }
   
-  .calendar-day.available:hover {
+  .calendar-day.available:hover,
+  .calendar-day.available:active {
     background: #10B981;
     color: white;
   }
@@ -903,13 +907,23 @@
         
         if (isAvailable) {
           dayCell.classList.add('available');
-          if (onSelect) dayCell.onclick = onSelect;
+          if (onSelect) {
+            // Support both click and touch events for mobile
+            dayCell.onclick = onSelect;
+            dayCell.addEventListener('touchend', function(e) {
+              e.preventDefault();
+              e.stopPropagation();
+              onSelect();
+            }, { passive: false });
+          }
         } else {
           dayCell.classList.add('blocked');
           if (blockedReason) {
             dayCell.title = blockedReason;
           }
           dayCell.onclick = null;
+          // Remove any existing touch listeners
+          dayCell.replaceWith(dayCell.cloneNode(true));
         }
       }
       
@@ -976,6 +990,10 @@
               dayCell.title = data.reason || 'Geen capaciteit (chauffeurs/trucks)';
             }
             dayCell.onclick = null;
+            // Remove any existing touch listeners by cloning
+            const newCell = dayCell.cloneNode(true);
+            dayCell.parentNode.replaceChild(newCell, dayCell);
+            dayCell = newCell;
           }
         } else {
           // If no dayCell, trigger a re-render to update the calendar
