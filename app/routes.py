@@ -517,11 +517,14 @@ def add_driver():
     # Check if email already exists
     existing_emp = Employee.query.filter_by(tenant_id=tid, email=email).first()
     
+    employee_id_val = None  # Initialize the variable
+    
     if existing_emp:
         # Check if it's the same person (current logged-in user)
         if existing_emp.employee_id == current_employee_id:
             # Same person: use existing employee, update info if needed, and add availability
             emp = existing_emp
+            employee_id_val = emp.employee_id  # Set the employee_id
             # Update name if provided (user might want to correct it)
             if first and first != emp.first_name:
                 emp.first_name = first
@@ -544,7 +547,7 @@ def add_driver():
             )
             db.session.add(emp)
             db.session.flush()  # Get the id before commit
-            created_employee_id = emp.employee_id
+            employee_id_val = emp.employee_id  # Set the employee_id
         else:
             # Postgres: insert with OVERRIDING SYSTEM VALUE
             sql = text("""
@@ -570,7 +573,13 @@ def add_driver():
                 flash("Kon chauffeur niet toevoegen (databasefout).", "error")
                 return redirect(url_for("main.drivers_list"))
             db.session.flush()
-            created_employee_id = row[1]
+            employee_id_val = row[1]  # Set the employee_id from PostgreSQL result
+
+    # Ensure employee_id_val is set
+    if employee_id_val is None:
+        db.session.rollback()
+        flash("Fout: Kon employee ID niet bepalen.", "error")
+        return redirect(url_for("main.drivers_list"))
 
     try:
         
@@ -1405,88 +1414,125 @@ def export_deliveries_ical():
     """
     from .utils.ical import create_delivery_ical
     from flask import Response
-    
-    if "employee_id" not in session:
-        return redirect(url_for("main.login"))
-    
-    tid = tenant_id()
-    
-    # Optionele filters
-    start_date_str = request.args.get("start")
-    end_date_str = request.args.get("end")
+    import traceback
     
     try:
-        # Haal leveringen op
-        query = db.session.query(
-            Delivery.delivery_id,
-            Delivery.delivery_status,
-            CustomerOrder.order_id,
-            Region.name.label('region_name'),
-            DeliveryRun.scheduled_date,
-            Location.address
-        ).outerjoin(
-            DeliveryRun,
-            (Delivery.tenant_id == DeliveryRun.tenant_id) & (Delivery.run_id == DeliveryRun.run_id)
-        ).outerjoin(
-            Region,
-            (DeliveryRun.tenant_id == Region.tenant_id) & (DeliveryRun.region_id == Region.region_id)
-        ).outerjoin(
-            CustomerOrder,
-            (Delivery.tenant_id == CustomerOrder.tenant_id) & (Delivery.order_id == CustomerOrder.order_id)
-        ).outerjoin(
-            Location,
-            (CustomerOrder.tenant_id == Location.tenant_id) & (CustomerOrder.location_id == Location.location_id)
-        ).filter(
-            Delivery.tenant_id == tid
-        )
+        if "employee_id" not in session:
+            current_app.logger.warning("Export iCal: User not logged in")
+            # Return lege calendar in plaats van redirect (voor download flow)
+            from icalendar import Calendar
+            cal = Calendar()
+            cal.add('prodid', '-//Sleep Inn Scheduler//sleepinn.be//')
+            cal.add('version', '2.0')
+            cal.add('calscale', 'GREGORIAN')
+            cal.add('method', 'PUBLISH')
+            ical_content = cal.to_ical()
+            if not isinstance(ical_content, bytes):
+                ical_content = ical_content.encode('utf-8')
+            response = Response(ical_content, mimetype='text/calendar; charset=utf-8')
+            response.headers['Content-Type'] = 'text/calendar; charset=utf-8'
+            response.headers['Content-Disposition'] = 'attachment; filename=leveringen.ics'
+            return response
         
-        # Filter op datum als opgegeven
-        if start_date_str:
-            try:
-                start_date = date.fromisoformat(start_date_str)
-                query = query.filter(DeliveryRun.scheduled_date >= start_date)
-            except ValueError:
-                pass
+        tid = tenant_id()
+        current_app.logger.info(f"Export iCal: Starting for tenant {tid}")
         
-        if end_date_str:
-            try:
-                end_date = date.fromisoformat(end_date_str)
-                query = query.filter(DeliveryRun.scheduled_date <= end_date)
-            except ValueError:
-                pass
+        # Optionele filters
+        start_date_str = request.args.get("start")
+        end_date_str = request.args.get("end")
         
-        rows = query.order_by(DeliveryRun.scheduled_date.asc()).all()
+        # Haal leveringen op met betere error handling
+        try:
+            query = db.session.query(
+                Delivery.delivery_id,
+                Delivery.delivery_status,
+                CustomerOrder.order_id,
+                Region.name.label('region_name'),
+                DeliveryRun.scheduled_date,
+                Location.address
+            ).outerjoin(
+                DeliveryRun,
+                (Delivery.tenant_id == DeliveryRun.tenant_id) & (Delivery.run_id == DeliveryRun.run_id)
+            ).outerjoin(
+                Region,
+                (DeliveryRun.tenant_id == Region.tenant_id) & (DeliveryRun.region_id == Region.region_id)
+            ).outerjoin(
+                CustomerOrder,
+                (Delivery.tenant_id == CustomerOrder.tenant_id) & (Delivery.order_id == CustomerOrder.order_id)
+            ).outerjoin(
+                Location,
+                (CustomerOrder.tenant_id == Location.tenant_id) & (CustomerOrder.location_id == Location.location_id)
+            ).filter(
+                Delivery.tenant_id == tid
+            )
+            
+            # Filter op datum als opgegeven
+            if start_date_str:
+                try:
+                    start_date = date.fromisoformat(start_date_str)
+                    query = query.filter(DeliveryRun.scheduled_date >= start_date)
+                except ValueError:
+                    current_app.logger.warning(f"Invalid start_date format: {start_date_str}")
+                    pass
+            
+            if end_date_str:
+                try:
+                    end_date = date.fromisoformat(end_date_str)
+                    query = query.filter(DeliveryRun.scheduled_date <= end_date)
+                except ValueError:
+                    current_app.logger.warning(f"Invalid end_date format: {end_date_str}")
+                    pass
+            
+            rows = query.order_by(DeliveryRun.scheduled_date.asc()).all()
+            current_app.logger.info(f"Export iCal: Found {len(rows)} deliveries")
+            
+        except Exception as query_error:
+            current_app.logger.error(f"Error querying deliveries: {query_error}")
+            current_app.logger.error(traceback.format_exc())
+            rows = []
         
         deliveries = []
         for row in rows:
-            # Haal product_description op
-            product_description = None
-            if row.order_id:
-                order_item = db.session.query(OrderItem).filter_by(
-                    tenant_id=tid, order_id=row.order_id
-                ).first()
-                if order_item:
-                    product = Product.query.filter_by(
-                        tenant_id=tid, product_id=order_item.product_id
-                    ).first()
-                    if product:
-                        product_description = product.name
-            
-            deliveries.append({
-                "delivery_id": row.delivery_id,
-                "order_id": row.order_id,
-                "product_description": product_description,
-                "region_name": row.region_name or "Onbekend",
-                "scheduled_date": row.scheduled_date,
-                "address": row.address,
-                "status": row.delivery_status
-            })
+            try:
+                # Haal product_description op
+                product_description = None
+                if row.order_id:
+                    try:
+                        order_item = db.session.query(OrderItem).filter_by(
+                            tenant_id=tid, order_id=row.order_id
+                        ).first()
+                        if order_item and order_item.product_id:
+                            product = Product.query.filter_by(
+                                tenant_id=tid, product_id=order_item.product_id
+                            ).first()
+                            if product:
+                                product_description = product.name
+                    except Exception as product_error:
+                        current_app.logger.warning(f"Error fetching product for order {row.order_id}: {product_error}")
+                        product_description = None
+                
+                deliveries.append({
+                    "delivery_id": row.delivery_id or 0,
+                    "order_id": row.order_id,
+                    "product_description": product_description,
+                    "region_name": row.region_name or "Onbekend",
+                    "scheduled_date": row.scheduled_date,
+                    "address": row.address or "",
+                    "status": row.delivery_status
+                })
+            except Exception as row_error:
+                current_app.logger.warning(f"Error processing delivery row: {row_error}")
+                continue
+        
+        current_app.logger.info(f"Export iCal: Processed {len(deliveries)} deliveries")
         
         # Genereer iCal - zorg dat dit altijd werkt, ook met lege lijst
         try:
             ical_content = create_delivery_ical(deliveries, "Delivery Schedule - Leveringen")
+            current_app.logger.info("Export iCal: Successfully generated iCal content")
         except Exception as ical_error:
             current_app.logger.error(f"Error creating iCal: {ical_error}")
+            current_app.logger.error(traceback.format_exc())
             # Fallback: maak een minimale geldige iCal
             from icalendar import Calendar
             cal = Calendar()
@@ -1494,6 +1540,7 @@ def export_deliveries_ical():
             cal.add('version', '2.0')
             cal.add('calscale', 'GREGORIAN')
             cal.add('method', 'PUBLISH')
+            cal.add('x-wr-calname', 'Sleep Inn - Leveringen')
             ical_content = cal.to_ical()
             if not isinstance(ical_content, bytes):
                 ical_content = ical_content.encode('utf-8')
@@ -1508,6 +1555,7 @@ def export_deliveries_ical():
         
     except Exception as e:
         current_app.logger.exception(f"Error exporting deliveries to iCal: {e}")
+        current_app.logger.error(traceback.format_exc())
         # Return een minimale geldige iCal in plaats van error (voor download flow)
         try:
             from icalendar import Calendar
