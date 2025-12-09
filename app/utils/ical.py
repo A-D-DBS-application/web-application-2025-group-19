@@ -38,75 +38,127 @@ def create_delivery_ical(deliveries: list, calendar_name: str = "Leveringen") ->
     cal.add('x-wr-timezone', 'Europe/Brussels')
     
     for delivery in deliveries:
-        event = Event()
-        
-        # Unieke ID voor het event
-        uid = f"delivery-{delivery.get('delivery_id', 'unknown')}@sleepinn.be"
-        event.add('uid', uid)
-        
-        # Titel van het event
-        region = delivery.get('region_name', 'Onbekend')
-        product_description = delivery.get('product_description', '')
-        product_id = delivery.get('product_id', delivery.get('order_id', ''))
-        
-        # Gebruik product_description als die beschikbaar is, anders product_id
-        if product_description:
-            title = f"📦 {product_description}"
-        elif product_id:
-            title = f"📦 Levering #{product_id}"
-        else:
-            title = f"📦 Levering"
-        
-        if region and region != 'Onbekend':
-            title += f" - {region}"
-        event.add('summary', title)
-        
-        # Datum (hele dag event)
-        scheduled_date = delivery.get('scheduled_date')
-        if scheduled_date:
-            if isinstance(scheduled_date, datetime):
-                scheduled_date = scheduled_date.date()
-            # Voor hele dag events: gebruik date object (icalendar converteert automatisch)
-            event.add('dtstart', scheduled_date)
-            event.add('dtend', scheduled_date + timedelta(days=1))
-        
-        # Locatie
-        address = delivery.get('address', '')
-        if address:
-            event.add('location', address)
-        elif region:
-            event.add('location', f"Regio: {region}")
-        
-        # Beschrijving
-        description_parts = []
-        if product_description:
-            description_parts.append(f"Product: {product_description}")
-        elif product_id:
-            description_parts.append(f"Product ID: #{product_id}")
-        if delivery.get('order_id'):
-            description_parts.append(f"Order ID: #{delivery['order_id']}")
-        if region:
-            description_parts.append(f"Regio: {region}")
-        if delivery.get('status'):
-            status_str = str(delivery['status']).replace('DeliveryStatus.', '')
-            description_parts.append(f"Status: {status_str}")
-        if address:
-            description_parts.append(f"Adres: {address}")
-        
-        event.add('description', '\n'.join(description_parts))
-        
-        # Status
-        event.add('status', 'CONFIRMED')
-        
-        # Timestamp (vereist voor iCal)
-        event.add('dtstamp', datetime.utcnow())
-        
-        # Categorie
-        event.add('categories', ['Levering'])
-        
-        cal.add_component(event)
+        try:
+            event = Event()
+            
+            # Unieke ID voor het event
+            delivery_id = delivery.get('delivery_id', 'unknown')
+            uid = f"delivery-{delivery_id}@sleepinn.be"
+            event.add('uid', uid)
+            
+            # Titel van het event
+            region = delivery.get('region_name', 'Onbekend') or 'Onbekend'
+            product_description = delivery.get('product_description', '') or ''
+            product_id = delivery.get('product_id', delivery.get('order_id', '')) or ''
+            
+            # Gebruik product_description als die beschikbaar is, anders product_id
+            if product_description:
+                title = f"📦 {product_description}"
+            elif product_id:
+                title = f"📦 Levering #{product_id}"
+            else:
+                title = f"📦 Levering"
+            
+            if region and region != 'Onbekend':
+                title += f" - {region}"
+            
+            # Zorg dat title een string is (geen None)
+            event.add('summary', str(title) if title else 'Levering')
+            
+            # Datum (hele dag event)
+            scheduled_date = delivery.get('scheduled_date')
+            if scheduled_date:
+                try:
+                    if isinstance(scheduled_date, datetime):
+                        scheduled_date = scheduled_date.date()
+                    elif isinstance(scheduled_date, str):
+                        # Probeer string te parsen
+                        from datetime import datetime as dt
+                        scheduled_date = dt.strptime(scheduled_date, '%Y-%m-%d').date()
+                    
+                    # Voor hele dag events: gebruik date object (icalendar converteert automatisch)
+                    if scheduled_date:
+                        event.add('dtstart', scheduled_date)
+                        event.add('dtend', scheduled_date + timedelta(days=1))
+                except Exception as date_error:
+                    # Skip deze delivery als datum niet geldig is
+                    continue
+            
+            # Locatie
+            address = delivery.get('address', '') or ''
+            if address:
+                event.add('location', str(address))
+            elif region and region != 'Onbekend':
+                event.add('location', f"Regio: {region}")
+            
+            # Beschrijving
+            description_parts = []
+            if product_description:
+                description_parts.append(f"Product: {product_description}")
+            elif product_id:
+                description_parts.append(f"Product ID: #{product_id}")
+            order_id = delivery.get('order_id')
+            if order_id:
+                description_parts.append(f"Order ID: #{order_id}")
+            if region and region != 'Onbekend':
+                description_parts.append(f"Regio: {region}")
+            status = delivery.get('status')
+            if status:
+                status_str = str(status).replace('DeliveryStatus.', '').replace('DeliveryStatus', '')
+                if status_str:
+                    description_parts.append(f"Status: {status_str}")
+            if address:
+                description_parts.append(f"Adres: {address}")
+            
+            # Beschrijving (zorg dat het een string is)
+            description_text = '\n'.join(description_parts) if description_parts else 'Levering'
+            event.add('description', str(description_text))
+            
+            # Status
+            event.add('status', 'CONFIRMED')
+            
+            # Timestamp (vereist voor iCal)
+            try:
+                event.add('dtstamp', datetime.utcnow())
+            except Exception:
+                # Fallback naar huidige tijd
+                from datetime import datetime as dt
+                event.add('dtstamp', dt.now())
+            
+            # Categorie (optioneel, sommige clients ondersteunen dit niet)
+            try:
+                event.add('categories', ['Levering'])
+            except Exception:
+                pass
+            
+            cal.add_component(event)
+        except Exception as delivery_error:
+            # Skip deze delivery als er een fout optreedt, maar log het
+            import logging
+            logging.warning(f"Skipping delivery due to error: {delivery_error}")
+            continue
     
-    return cal.to_ical()
+    # Genereer iCal content als bytes
+    try:
+        ical_bytes = cal.to_ical()
+        # Zorg dat het correct geformatteerd is voor Google Calendar
+        if isinstance(ical_bytes, bytes):
+            return ical_bytes
+        else:
+            return ical_bytes.encode('utf-8')
+    except Exception as e:
+        # Fallback: maak een minimale geldige iCal
+        cal_minimal = Calendar()
+        cal_minimal.add('prodid', '-//Sleep Inn Scheduler//sleepinn.be//')
+        cal_minimal.add('version', '2.0')
+        cal_minimal.add('calscale', 'GREGORIAN')
+        cal_minimal.add('method', 'PUBLISH')
+        cal_minimal.add('x-wr-calname', f"Sleep Inn - {calendar_name}")
+        ical_bytes = cal_minimal.to_ical()
+        if isinstance(ical_bytes, bytes):
+            return ical_bytes
+        else:
+            return ical_bytes.encode('utf-8')
 
 
 def create_driver_schedule_ical(driver_name: str, deliveries: list, 

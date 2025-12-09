@@ -1482,25 +1482,50 @@ def export_deliveries_ical():
                 "status": row.delivery_status
             })
         
-        # Genereer iCal
-        ical_content = create_delivery_ical(deliveries, "Delivery Schedule - Leveringen")
+        # Genereer iCal - zorg dat dit altijd werkt, ook met lege lijst
+        try:
+            ical_content = create_delivery_ical(deliveries, "Delivery Schedule - Leveringen")
+        except Exception as ical_error:
+            current_app.logger.error(f"Error creating iCal: {ical_error}")
+            # Fallback: maak een minimale geldige iCal
+            from icalendar import Calendar
+            cal = Calendar()
+            cal.add('prodid', '-//Sleep Inn Scheduler//sleepinn.be//')
+            cal.add('version', '2.0')
+            cal.add('calscale', 'GREGORIAN')
+            cal.add('method', 'PUBLISH')
+            ical_content = cal.to_ical()
+            if not isinstance(ical_content, bytes):
+                ical_content = ical_content.encode('utf-8')
         
         # Return als downloadbaar .ics bestand
         # Dit werkt het beste voor Google Calendar import (via bestand upload)
         response = Response(ical_content, mimetype='text/calendar; charset=utf-8')
         response.headers['Content-Type'] = 'text/calendar; charset=utf-8'
         response.headers['Content-Disposition'] = 'attachment; filename=leveringen.ics'
-        # Zorg dat het bestand correct wordt gedownload
-        response.headers['Content-Transfer-Encoding'] = 'binary'
         
         return response
         
     except Exception as e:
         current_app.logger.exception(f"Error exporting deliveries to iCal: {e}")
-        # Return een lege calendar in plaats van redirect (voor download flow)
-        from .utils.ical import create_delivery_ical
-        empty_cal = create_delivery_ical([], "Leveringen")
-        response = Response(empty_cal, mimetype='text/calendar; charset=utf-8')
+        # Return een minimale geldige iCal in plaats van error (voor download flow)
+        try:
+            from icalendar import Calendar
+            cal = Calendar()
+            cal.add('prodid', '-//Sleep Inn Scheduler//sleepinn.be//')
+            cal.add('version', '2.0')
+            cal.add('calscale', 'GREGORIAN')
+            cal.add('method', 'PUBLISH')
+            cal.add('x-wr-calname', 'Sleep Inn - Leveringen')
+            ical_content = cal.to_ical()
+            if not isinstance(ical_content, bytes):
+                ical_content = ical_content.encode('utf-8')
+        except Exception as fallback_error:
+            current_app.logger.error(f"Even fallback iCal failed: {fallback_error}")
+            # Laatste redmiddel: return een minimale geldige iCal string
+            ical_content = b'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Sleep Inn Scheduler//sleepinn.be//\r\nCALSCALE:GREGORIAN\r\nMETHOD:PUBLISH\r\nEND:VCALENDAR\r\n'
+        
+        response = Response(ical_content, mimetype='text/calendar; charset=utf-8')
         response.headers['Content-Type'] = 'text/calendar; charset=utf-8'
         response.headers['Content-Disposition'] = 'attachment; filename=leveringen.ics'
         return response
