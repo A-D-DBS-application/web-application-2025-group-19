@@ -15,6 +15,7 @@ from .models import (
     get_next_truck_id, get_next_employee_id, get_next_availability_id, get_capacity_info_for_date, count_available_drivers_for_date,
     count_available_trucks, count_active_regions_for_date
 )
+from sqlalchemy import text
 
 # Mapbox API configuratie - wordt uit config geladen
 def get_mapbox_token():
@@ -69,6 +70,15 @@ def index():
     next_week_end = today + timedelta(days=14)
     
     try:
+        # Normalize employee id to use for availability operations
+        if existing_emp:
+            employee_id_val = existing_emp.employee_id
+        else:
+            # either ORM-created `emp` or raw-insert created_employee_id
+            if 'emp' in locals():
+                employee_id_val = emp.employee_id
+            else:
+                employee_id_val = created_employee_id
         # 1. Geplande leveringen deze week
         deliveries_this_week = db.session.query(db.func.count(Delivery.delivery_id)).filter(
             Delivery.tenant_id == tid,
@@ -319,20 +329,52 @@ def register():
     ).scalar() or 0
     next_emp_id = max_emp_id + 1
 
-    emp = Employee(
-        tenant_id=tid,
-        employee_id=next_emp_id,
-        first_name=first,
-        last_name=last,
-        email=email,
-        role=EmployeeRole.seller,
-        active=True
-    )
-    db.session.add(emp)
-    db.session.flush()
-    session["employee_id"] = emp.employee_id
-    session["username"] = f"{emp.first_name}.{emp.last_name}".lower()
-    db.session.commit()
+    # If using SQLite, use ORM insertion; if Postgres (Identity column exists),
+    # use raw INSERT with OVERRIDING SYSTEM VALUE to allow explicit employee_id insertion.
+    db_uri = current_app.config.get("SQLALCHEMY_DATABASE_URI", "") or ""
+    if db_uri.startswith("sqlite:"):
+        emp = Employee(
+            tenant_id=tid,
+            employee_id=next_emp_id,
+            first_name=first,
+            last_name=last,
+            email=email,
+            role=EmployeeRole.seller,
+            active=True
+        )
+        db.session.add(emp)
+        db.session.flush()
+        session["employee_id"] = emp.employee_id
+        session["username"] = f"{emp.first_name}.{emp.last_name}".lower()
+        db.session.commit()
+    else:
+        # Postgres path: execute raw insert with OVERRIDING SYSTEM VALUE
+        sql = text("""
+        INSERT INTO employee (tenant_id, employee_id, location_id, first_name, last_name, email, role, active)
+        VALUES (:tenant_id, :employee_id, :location_id, :first_name, :last_name, :email, :role, :active)
+        OVERRIDING SYSTEM VALUE
+        RETURNING id, employee_id, first_name, last_name
+        """)
+        params = {
+            "tenant_id": tid,
+            "employee_id": next_emp_id,
+            "location_id": None,
+            "first_name": first,
+            "last_name": last,
+            "email": email,
+            "role": EmployeeRole.seller.value if hasattr(EmployeeRole, 'seller') else 'seller',
+            "active": True,
+        }
+        result = db.session.execute(sql, params)
+        row = result.fetchone()
+        if row is None:
+            db.session.rollback()
+            flash("Kon account niet aanmaken (databasefout).", "error")
+            return redirect(url_for("main.register"))
+        # row: (id, employee_id, first_name, last_name)
+        db.session.commit()
+        session["employee_id"] = row[1]
+        session["username"] = f"{row[2]}.{row[3]}".lower()
 
     flash("Account aangemaakt en ingelogd.", "success")
     return redirect(url_for("main.index"))
@@ -494,12 +536,41 @@ def add_driver():
     else:
         # Email doesn't exist: create new employee
         next_emp_id = get_next_employee_id(tid)
-        emp = Employee(
-            tenant_id=tid, employee_id=next_emp_id, first_name=first, last_name=last, email=email,
-            role=EmployeeRole.driver, active=True
-        )
-        db.session.add(emp)
-        db.session.flush()  # Get the id before commit
+        db_uri = current_app.config.get("SQLALCHEMY_DATABASE_URI", "") or ""
+        if db_uri.startswith("sqlite:"):
+            emp = Employee(
+                tenant_id=tid, employee_id=next_emp_id, first_name=first, last_name=last, email=email,
+                role=EmployeeRole.driver, active=True
+            )
+            db.session.add(emp)
+            db.session.flush()  # Get the id before commit
+            created_employee_id = emp.employee_id
+        else:
+            # Postgres: insert with OVERRIDING SYSTEM VALUE
+            sql = text("""
+            INSERT INTO employee (tenant_id, employee_id, location_id, first_name, last_name, email, role, active)
+            VALUES (:tenant_id, :employee_id, :location_id, :first_name, :last_name, :email, :role, :active)
+            OVERRIDING SYSTEM VALUE
+            RETURNING id, employee_id
+            """)
+            params = {
+                "tenant_id": tid,
+                "employee_id": next_emp_id,
+                "location_id": None,
+                "first_name": first,
+                "last_name": last,
+                "email": email,
+                "role": EmployeeRole.driver.value if hasattr(EmployeeRole, 'driver') else 'driver',
+                "active": True,
+            }
+            res = db.session.execute(sql, params)
+            row = res.fetchone()
+            if row is None:
+                db.session.rollback()
+                flash("Kon chauffeur niet toevoegen (databasefout).", "error")
+                return redirect(url_for("main.drivers_list"))
+            db.session.flush()
+            created_employee_id = row[1]
 
     try:
         
@@ -540,7 +611,7 @@ def add_driver():
             try:
                 # Check if availability already exists
                 existing = Availability.query.filter_by(
-                    tenant_id=tid, employee_id=emp.employee_id, available_date=availability_date
+                    tenant_id=tid, employee_id=employee_id_val, available_date=availability_date
                 ).first()
                 
                 if existing:
@@ -551,7 +622,7 @@ def add_driver():
                     availability_counter += 1
                     
                     av = Availability(
-                        tenant_id=tid, availability_id=availability_id, employee_id=emp.employee_id,
+                        tenant_id=tid, availability_id=availability_id, employee_id=employee_id_val,
                         available_date=availability_date, active=True
                     )
                     db.session.add(av)
