@@ -1494,3 +1494,83 @@ def export_my_schedule_ical():
         return redirect(url_for("main.login"))
     
     return redirect(url_for("main.export_driver_schedule_ical", employee_id=session["employee_id"]))
+
+
+# --- Region Settings API ---
+@main.route("/api/region-settings", methods=["GET"])
+def get_region_settings():
+    """
+    Haal de huidige regio-instellingen op (tenant defaults).
+    """
+    if "employee_id" not in session:
+        return jsonify({"error": "Niet ingelogd"}), 401
+    
+    tid = tenant_id()
+    tenant = Tenant.query.get(tid)
+    
+    if not tenant:
+        return jsonify({"error": "Tenant niet gevonden"}), 404
+    
+    return jsonify({
+        "radius_km": tenant.default_radius_km or 30.0,
+        "max_deliveries_per_day": tenant.default_max_deliveries or 13
+    })
+
+
+@main.route("/api/region-settings", methods=["POST"])
+def update_region_settings():
+    """
+    Update de regio-instellingen (tenant defaults).
+    Kan ook alle bestaande regio's bijwerken indien gewenst.
+    """
+    if "employee_id" not in session:
+        return jsonify({"error": "Niet ingelogd"}), 401
+    
+    tid = tenant_id()
+    tenant = Tenant.query.get(tid)
+    
+    if not tenant:
+        return jsonify({"error": "Tenant niet gevonden"}), 404
+    
+    data = request.get_json() or {}
+    
+    # Valideer waarden
+    radius_km = data.get("radius_km")
+    max_deliveries = data.get("max_deliveries_per_day")
+    update_existing = data.get("update_existing_regions", False)
+    
+    if radius_km is not None:
+        try:
+            radius_km = float(radius_km)
+            if radius_km < 1 or radius_km > 500:
+                return jsonify({"error": "Straal moet tussen 1 en 500 km zijn"}), 400
+            tenant.default_radius_km = radius_km
+        except (ValueError, TypeError):
+            return jsonify({"error": "Ongeldige straal waarde"}), 400
+    
+    if max_deliveries is not None:
+        try:
+            max_deliveries = int(max_deliveries)
+            if max_deliveries < 1 or max_deliveries > 100:
+                return jsonify({"error": "Max leveringen moet tussen 1 en 100 zijn"}), 400
+            tenant.default_max_deliveries = max_deliveries
+        except (ValueError, TypeError):
+            return jsonify({"error": "Ongeldige max leveringen waarde"}), 400
+    
+    # Update ook alle bestaande regio's indien gewenst
+    if update_existing:
+        regions = Region.query.filter_by(tenant_id=tid).all()
+        for region in regions:
+            if radius_km is not None:
+                region.radius_km = radius_km
+            if max_deliveries is not None:
+                region.max_deliveries_per_day = max_deliveries
+    
+    db.session.commit()
+    
+    return jsonify({
+        "success": True,
+        "radius_km": tenant.default_radius_km,
+        "max_deliveries_per_day": tenant.default_max_deliveries,
+        "regions_updated": len(regions) if update_existing else 0
+    })
