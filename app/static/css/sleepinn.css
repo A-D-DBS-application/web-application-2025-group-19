@@ -154,10 +154,18 @@ a:hover {
   font-weight: 700;
   font-size: 1.125rem;
   color: var(--color-black);
-  transition: color var(--transition-fast);
+  text-decoration: none;
+}
+
+.navbar-brand:hover {
+  color: var(--color-black);
 }
 
 .navbar.scrolled .navbar-brand {
+  color: var(--color-white);
+}
+
+.navbar.scrolled .navbar-brand:hover {
   color: var(--color-white);
 }
 
@@ -170,11 +178,10 @@ a:hover {
   align-items: center;
   justify-content: center;
   color: var(--color-white);
-  transition: all var(--transition-normal);
 }
 
 .navbar-brand:hover .navbar-brand-icon {
-  background: var(--color-sky-accent);
+  background: var(--color-navy);
 }
 
 .navbar.scrolled .navbar-brand-icon {
@@ -183,8 +190,8 @@ a:hover {
 }
 
 .navbar.scrolled .navbar-brand:hover .navbar-brand-icon {
-  background: var(--color-sky-accent);
-  color: var(--color-white);
+  background: var(--color-warm-beige);
+  color: var(--color-navy);
 }
 
 .navbar-nav {
