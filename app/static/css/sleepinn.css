@@ -304,6 +304,15 @@ a:hover {
   color: var(--color-sky-accent);
 }
 
+.navbar.scrolled .btn-ghost {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.navbar.scrolled .btn-ghost:hover {
+  color: var(--color-sky-accent);
+  background: rgba(126, 184, 218, 0.15);
+}
+
 .btn-danger {
   background: transparent;
   color: var(--color-error);
