@@ -33,10 +33,12 @@ def create_app():
     # If not explicitly using SQLite, test the connection and fallback if needed
     if not use_sqlite and db_uri and "postgresql" in db_uri:
         if not _test_db_connection(db_uri):
-            app.logger.warning("PostgreSQL connection failed. Falling back to SQLite...")
-            db_path = Path(__file__).parent.parent / "dev.db"
-            app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
-            app.logger.info(f"Using SQLite database at: {db_path}")
+            raise RuntimeError(
+                "❌ Could not connect to Supabase Postgres. "
+                "Check credentials, network, and SSL settings. "
+                "SQLite fallback is disabled."
+            )
+
 
     db.init_app(app)
     migrate.init_app(app, db)
