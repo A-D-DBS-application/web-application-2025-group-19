@@ -73,8 +73,7 @@ body {
   font-size: 16px;
   line-height: 1.6;
   color: var(--color-dark-gray);
-  background: linear-gradient(135deg, #FAF8F3 0%, #F7F3EC 50%, #FAF8F3 100%);
-  background-attachment: fixed;
+  background: #FAF8F3;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   min-height: 100vh;
