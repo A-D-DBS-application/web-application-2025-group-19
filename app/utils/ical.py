@@ -46,9 +46,18 @@ def create_delivery_ical(deliveries: list, calendar_name: str = "Leveringen") ->
         
         # Titel van het event
         region = delivery.get('region_name', 'Onbekend')
+        product_description = delivery.get('product_description', '')
         product_id = delivery.get('product_id', delivery.get('order_id', ''))
-        title = f"📦 Levering #{product_id}" if product_id else f"📦 Levering"
-        if region:
+        
+        # Gebruik product_description als die beschikbaar is, anders product_id
+        if product_description:
+            title = f"📦 {product_description}"
+        elif product_id:
+            title = f"📦 Levering #{product_id}"
+        else:
+            title = f"📦 Levering"
+        
+        if region and region != 'Onbekend':
             title += f" - {region}"
         event.add('summary', title)
         
@@ -57,6 +66,7 @@ def create_delivery_ical(deliveries: list, calendar_name: str = "Leveringen") ->
         if scheduled_date:
             if isinstance(scheduled_date, datetime):
                 scheduled_date = scheduled_date.date()
+            # Voor hele dag events: gebruik date object (icalendar converteert automatisch)
             event.add('dtstart', scheduled_date)
             event.add('dtend', scheduled_date + timedelta(days=1))
         
@@ -69,7 +79,9 @@ def create_delivery_ical(deliveries: list, calendar_name: str = "Leveringen") ->
         
         # Beschrijving
         description_parts = []
-        if product_id:
+        if product_description:
+            description_parts.append(f"Product: {product_description}")
+        elif product_id:
             description_parts.append(f"Product ID: #{product_id}")
         if delivery.get('order_id'):
             description_parts.append(f"Order ID: #{delivery['order_id']}")
@@ -86,7 +98,7 @@ def create_delivery_ical(deliveries: list, calendar_name: str = "Leveringen") ->
         # Status
         event.add('status', 'CONFIRMED')
         
-        # Timestamp
+        # Timestamp (vereist voor iCal)
         event.add('dtstamp', datetime.utcnow())
         
         # Categorie
@@ -188,7 +200,12 @@ def create_driver_schedule_ical(driver_name: str, deliveries: list,
             
             cal.add_component(event)
     
-    return cal.to_ical()
+    # Genereer iCal content als bytes
+    ical_bytes = cal.to_ical()
+    if isinstance(ical_bytes, bytes):
+        return ical_bytes
+    else:
+        return ical_bytes.encode('utf-8')
 
 
 def create_single_delivery_ical(delivery: dict) -> bytes:

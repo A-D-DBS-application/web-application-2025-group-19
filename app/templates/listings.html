@@ -8,14 +8,14 @@
     <p class="page-subtitle">Overzicht van alle geplande en uitgevoerde leveringen.</p>
   </div>
   <div class="flex gap-2">
-    <a href="{{ url_for('main.export_deliveries_ical') }}" class="btn btn-outline" title="Exporteer naar Apple Calendar, Google Calendar, Outlook, etc.">
+    <a href="#" id="google-calendar-link" class="btn btn-outline" title="Voeg leveringen toe aan Google Calendar">
       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
         <line x1="16" y1="2" x2="16" y2="6"></line>
         <line x1="8" y1="2" x2="8" y2="6"></line>
         <line x1="3" y1="10" x2="21" y2="10"></line>
       </svg>
-      Exporteer naar Kalender
+      Toevoegen aan Google Calendar
     </a>
     <a href="{{ url_for('main.add_listing') }}" class="btn btn-primary">
       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -82,4 +82,50 @@
     </div>
   </div>
 {% endif %}
+
+<script>
+  // Google Calendar link - direct toevoegen
+  const googleCalendarLink = document.getElementById('google-calendar-link');
+  
+  googleCalendarLink.addEventListener('click', function(e) {
+    e.preventDefault();
+    
+    // Download het iCal bestand direct via een link (simpler en betrouwbaarder)
+    const icalUrl = window.location.origin + '{{ url_for("main.export_deliveries_ical") }}';
+    
+    // Maak een tijdelijk download link element
+    const link = document.createElement('a');
+    link.href = icalUrl;
+    link.download = 'leveringen.ics';
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    
+    // Trigger download
+    link.click();
+    
+    // Verwijder link na korte delay
+    setTimeout(() => {
+      document.body.removeChild(link);
+      
+      // Toon instructies na download
+      setTimeout(() => {
+        const message = '✅ Bestand "leveringen.ics" is gedownload!\n\n' +
+                       '📅 Volg deze stappen om toe te voegen aan Google Calendar:\n\n' +
+                       '1. Ga naar calendar.google.com (wordt nu geopend)\n' +
+                       '2. Klik op het "+" naast "Andere agenda\'s" (links)\n' +
+                       '3. Kies "Importeren"\n' +
+                       '4. Klik "Bestand kiezen"\n' +
+                       '5. Selecteer het gedownloade "leveringen.ics" bestand\n' +
+                       '6. Kies in welke agenda je de leveringen wilt toevoegen\n' +
+                       '7. Klik op "Importeren"\n\n' +
+                       '✨ Je leveringen worden dan toegevoegd aan je Google Calendar!';
+        
+        if (confirm(message)) {
+          // Open Google Calendar import pagina
+          window.open('https://calendar.google.com/calendar/u/0/r/settings/export', '_blank');
+        }
+      }, 500);
+    }, 100);
+  });
+</script>
 {% endblock %}

@@ -1459,9 +1459,23 @@ def export_deliveries_ical():
         
         deliveries = []
         for row in rows:
+            # Haal product_description op
+            product_description = None
+            if row.order_id:
+                order_item = db.session.query(OrderItem).filter_by(
+                    tenant_id=tid, order_id=row.order_id
+                ).first()
+                if order_item:
+                    product = Product.query.filter_by(
+                        tenant_id=tid, product_id=order_item.product_id
+                    ).first()
+                    if product:
+                        product_description = product.name
+            
             deliveries.append({
                 "delivery_id": row.delivery_id,
                 "order_id": row.order_id,
+                "product_description": product_description,
                 "region_name": row.region_name or "Onbekend",
                 "scheduled_date": row.scheduled_date,
                 "address": row.address,
@@ -1471,15 +1485,25 @@ def export_deliveries_ical():
         # Genereer iCal
         ical_content = create_delivery_ical(deliveries, "Delivery Schedule - Leveringen")
         
-        # Return als downloadbaar bestand
-        response = Response(ical_content, mimetype='text/calendar')
+        # Return als downloadbaar .ics bestand
+        # Dit werkt het beste voor Google Calendar import (via bestand upload)
+        response = Response(ical_content, mimetype='text/calendar; charset=utf-8')
+        response.headers['Content-Type'] = 'text/calendar; charset=utf-8'
         response.headers['Content-Disposition'] = 'attachment; filename=leveringen.ics'
+        # Zorg dat het bestand correct wordt gedownload
+        response.headers['Content-Transfer-Encoding'] = 'binary'
+        
         return response
         
     except Exception as e:
         current_app.logger.exception(f"Error exporting deliveries to iCal: {e}")
-        flash("Kon leveringen niet exporteren.", "error")
-        return redirect(url_for("main.listings"))
+        # Return een lege calendar in plaats van redirect (voor download flow)
+        from .utils.ical import create_delivery_ical
+        empty_cal = create_delivery_ical([], "Leveringen")
+        response = Response(empty_cal, mimetype='text/calendar; charset=utf-8')
+        response.headers['Content-Type'] = 'text/calendar; charset=utf-8'
+        response.headers['Content-Disposition'] = 'attachment; filename=leveringen.ics'
+        return response
 
 
 @main.route("/export/driver/<int:employee_id>/schedule.ics", methods=["GET"])
