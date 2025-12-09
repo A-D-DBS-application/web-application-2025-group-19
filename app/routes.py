@@ -602,8 +602,21 @@ def schedule():
     product_description = request.form.get("product_description", "").strip()
     address = request.form.get("address")
     region_name = request.form.get("region_id")  # Municipality name (optional)
-    municipality = request.form.get("municipality", "").strip()  # Gemeente invoerveld
+    municipality = request.form.get("municipality", "").strip()  # Gemeente (optioneel, wordt uit adres gehaald indien niet opgegeven)
     scheduled_date_str = request.form.get("scheduled_date")
+    
+    # Extract municipality from address if not provided
+    if not municipality and address:
+        # Extract municipality from address (e.g., "Kerkstraat 10, 1000 Brussel, België" -> "Brussel")
+        parts = address.split(',')
+        if len(parts) >= 2:
+            postal_part = parts[1].strip()
+            postal_words = postal_part.split()
+            if len(postal_words) >= 2:
+                # Skip postal code, get municipality (rest of the words)
+                municipality = ' '.join(postal_words[1:])
+            elif len(postal_words) == 1:
+                municipality = postal_words[0]
     
     # Coördinaten uit hidden fields (gezet door frontend via Mapbox)
     lat_str = request.form.get("lat", "")
