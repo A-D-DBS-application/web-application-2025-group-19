@@ -255,14 +255,14 @@ def listings():
         items = []
         for row in rows:
             try:
-                # Unpack: delivery_id, product_name, region_name, status, order_date, scheduled_date, region_id
-                d_id, product_name, region_name, status, order_date, sched_date, r_id = row
+                # Unpack: delivery_id, product_name, municipality, status, order_date, scheduled_date, region_id
+                d_id, product_name, municipality, status, order_date, sched_date, r_id = row
 
                 # Build display info - show product_name (description) instead of product_id
                 items.append({
                     "delivery_id": d_id,
                     "product_description": product_name or 'Onbekend product',  # Use product name/description
-                    "municipality": region_name or 'N/A',
+                    "municipality": municipality or 'N/A',  # Use actual municipality from RegionAddress
                     "status": str(status).split('.')[-1] if status else 'unknown',  # Extract enum value
                     "scheduled_date": sched_date
                 })
@@ -454,8 +454,10 @@ def add_listing():
     # Demo customer/location — vervang later met echte UI-selecties
     customer = Customer.query.filter_by(tenant_id=tid, email="demo@customer.local").first()
     if not customer:
+        # Use a default municipality if none is provided
+        customer_municipality = "DemoTown"
         customer = Customer(
-            tenant_id=tid, name="Demo Customer", municipality="DemoTown",
+            tenant_id=tid, name="Demo Customer", municipality=customer_municipality,
             email="demo@customer.local"
         )
         db.session.add(customer)
@@ -826,9 +828,16 @@ def schedule():
         if not customer:
             from .models import get_next_customer_id
             customer_id = get_next_customer_id(tid)
-            customer = Customer(tenant_id=tid, customer_id=customer_id, name="Demo Customer", municipality="DemoTown", email="demo@customer.local")
+            # Use municipality from form if available, otherwise use "DemoTown"
+            customer_municipality = municipality if municipality else "DemoTown"
+            customer = Customer(tenant_id=tid, customer_id=customer_id, name="Demo Customer", municipality=customer_municipality, email="demo@customer.local")
             db.session.add(customer)
             db.session.flush()
+        else:
+            # Update existing customer's municipality if provided
+            if municipality:
+                customer.municipality = municipality
+                db.session.flush()
 
         # Use address from form if provided for the initial demo location, otherwise use default.
         location_address = address if address else "Demo Street 1"
