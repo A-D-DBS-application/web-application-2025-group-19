@@ -57,11 +57,6 @@ class EmployeeRole(enum.Enum):
     driver = "driver"
     manager = "manager"
     helper = "helper"
-
-# Halve dag enum
-class HalfDay(enum.Enum):
-    am = "am"
-    pm = "pm"
     admin = "admin"
 
 class OrderStatus(enum.Enum):
@@ -117,8 +112,6 @@ class RegionAddress(db.Model):
     address_id  = pk_id_column(is_composite_key_part=True)
     region_id   = db.Column(db.Integer, nullable=False)
     scheduled_date = db.Column(db.Date, nullable=False)  # Datum van de levering
-    half_day = db.Column(db.Enum(HalfDay, name="half_day", native_enum=True),
-                         nullable=False, default=HalfDay.am)
     address     = db.Column(db.String(300), nullable=False)
     latitude    = db.Column(db.Float, nullable=False)
     longitude   = db.Column(db.Float, nullable=False)
@@ -182,8 +175,6 @@ class Availability(db.Model):
     availability_id = pk_id_column(is_composite_key_part=True)
     employee_id     = db.Column(db.Integer, nullable=False)
     available_date  = db.Column(db.Date, nullable=False)
-    half_day        = db.Column(db.Enum(HalfDay, name="half_day", native_enum=True),
-                                nullable=False, default=HalfDay.am)
     active          = db.Column(db.Boolean, default=True)
     __table_args__ = (
         ForeignKeyConstraint(["tenant_id", "employee_id"],
@@ -303,8 +294,6 @@ class DeliveryRun(db.Model):
     tenant_id   = db.Column(db.Integer, primary_key=True)
     run_id          = pk_id_column(is_composite_key_part=True)
     scheduled_date  = db.Column(db.Date, nullable=False)
-    half_day        = db.Column(db.Enum(HalfDay, name="half_day", native_enum=True),
-                                nullable=False, default=HalfDay.am)
     region_id       = db.Column(db.Integer)
     driver_id       = db.Column(db.Integer)
     truck_id        = db.Column(db.Integer)  # Link naar fysieke truck
@@ -357,9 +346,9 @@ TIME_SLOT_RULES = {
 
 # ---------- Helper functies ----------
 
-def set_employee_availability(tenant_id: int, employee_id: int, available_date: date, half_day: HalfDay = HalfDay.am, active: bool = True):
+def set_employee_availability(tenant_id: int, employee_id: int, available_date: date, active: bool = True):
     av = Availability.query.filter_by(
-        tenant_id=tenant_id, employee_id=employee_id, available_date=available_date, half_day=half_day
+        tenant_id=tenant_id, employee_id=employee_id, available_date=available_date
     ).first()
     if av:
         av.active = active
@@ -367,7 +356,7 @@ def set_employee_availability(tenant_id: int, employee_id: int, available_date: 
         availability_id = get_next_availability_id(tenant_id)
         av = Availability(
             tenant_id=tenant_id, availability_id=availability_id, employee_id=employee_id,
-            available_date=available_date, half_day=half_day, active=active
+            available_date=available_date, active=active
         )
         db.session.add(av)
     db.session.commit()
@@ -449,7 +438,7 @@ def get_next_truck_id(tenant_id: int) -> int:
     ).scalar()
     return (max_id or 0) + 1
 
-def get_available_drivers(tenant_id: int, region_id: int, on_date: date, half_day: HalfDay = HalfDay.am):
+def get_available_drivers(tenant_id: int, region_id: int, on_date: date):
     q = db.session.query(Employee).join(
         Location,
         (Employee.tenant_id == Location.tenant_id) & (Employee.location_id == Location.location_id)
@@ -462,7 +451,6 @@ def get_available_drivers(tenant_id: int, region_id: int, on_date: date, half_da
         Employee.active.is_(True),
         Location.region_id == region_id,
         Availability.available_date == on_date,
-        Availability.half_day == half_day,
         Availability.active.is_(True),
     )
     return q.all()
@@ -511,7 +499,7 @@ def add_order(tenant_id: int, customer_id: int, location_id: int, seller_id: int
     return order.order_id
 
 def upsert_run_and_attach_delivery_with_capacity(
-    tenant_id: int, order_id: int, region_id: int, driver_id: int, scheduled_date: date, half_day: HalfDay = HalfDay.am
+    tenant_id: int, order_id: int, region_id: int, driver_id: int, scheduled_date: date
 ) -> int:
     # 1) run zoeken of maken
     # If region_id is None, use a default region or create one
@@ -525,7 +513,7 @@ def upsert_run_and_attach_delivery_with_capacity(
         region_id = region.region_id
     
     run = DeliveryRun.query.filter_by(
-        tenant_id=tenant_id, region_id=region_id, scheduled_date=scheduled_date, half_day=half_day
+        tenant_id=tenant_id, region_id=region_id, scheduled_date=scheduled_date
     ).with_for_update(of=DeliveryRun).first()
     if not run:
         # When attaching a delivery via scheduling, mark the run as active so it
@@ -533,7 +521,7 @@ def upsert_run_and_attach_delivery_with_capacity(
         # trucks created via the add-truck UI will use RunStatus.planned.
         run_id = get_next_run_id(tenant_id)
         run = DeliveryRun(
-            tenant_id=tenant_id, run_id=run_id, scheduled_date=scheduled_date, half_day=half_day,
+            tenant_id=tenant_id, run_id=run_id, scheduled_date=scheduled_date,
             region_id=region_id, driver_id=driver_id,
             capacity=10, status=RunStatus.in_progress
         )
@@ -544,9 +532,9 @@ def upsert_run_and_attach_delivery_with_capacity(
     region = Region.query.filter_by(tenant_id=tenant_id, region_id=region_id).first()
     if region:
         max_deliveries = region.max_deliveries_per_day or 13
-        delivery_count = count_deliveries_for_region_date(tenant_id, region_id, scheduled_date, half_day)
+        delivery_count = count_deliveries_for_region_date(tenant_id, region_id, scheduled_date)
         if delivery_count >= max_deliveries:
-            raise ValueError(f"Deze regio heeft al {max_deliveries} leveringen op {scheduled_date.strftime('%d-%m-%Y')} ({half_day.value}). Maximum per halve dag bereikt.")
+            raise ValueError(f"Deze regio heeft al {max_deliveries} leveringen op {scheduled_date.strftime('%d-%m-%Y')}. Maximum aantal leveringen per dag bereikt.")
     
     # 3) capaciteitscontrole - simplified
     add_minutes = compute_order_minutes(tenant_id, order_id)
@@ -691,22 +679,19 @@ def find_matching_regions(tenant_id: int, lat: float, lng: float, max_distance_k
     return matching
 
 
-def count_deliveries_for_region_date(tenant_id: int, region_id: int, scheduled_date: date, half_day: HalfDay = None) -> int:
+def count_deliveries_for_region_date(tenant_id: int, region_id: int, scheduled_date: date) -> int:
     """
-    Tel het aantal leveringen voor een specifieke regio op een specifieke datum; optioneel per halve dag.
+    Tel het aantal leveringen voor een specifieke regio op een specifieke datum.
     """
-    q = RegionAddress.query.filter(
+    count = RegionAddress.query.filter(
         RegionAddress.tenant_id == tenant_id,
         RegionAddress.region_id == region_id,
         RegionAddress.scheduled_date == scheduled_date
-    )
-    if half_day is not None:
-        q = q.filter(RegionAddress.half_day == half_day)
-    count = q.count()
+    ).count()
     return count
 
 
-def get_available_dates_for_region(tenant_id: int, region_id: int, max_deliveries: int = None, days_ahead: int = 30, half_day: HalfDay = HalfDay.am):
+def get_available_dates_for_region(tenant_id: int, region_id: int, max_deliveries: int = None, days_ahead: int = 30):
     """
     Krijg beschikbare datums voor een regio (datums met minder dan max_deliveries).
     Als max_deliveries niet is opgegeven, wordt de waarde uit de regio gehaald.
@@ -722,12 +707,11 @@ def get_available_dates_for_region(tenant_id: int, region_id: int, max_deliverie
     
     for i in range(days_ahead):
         check_date = today + timedelta(days=i)
-        delivery_count = count_deliveries_for_region_date(tenant_id, region_id, check_date, half_day)
+        delivery_count = count_deliveries_for_region_date(tenant_id, region_id, check_date)
         
         if delivery_count < max_deliveries:
             available_dates.append({
                 "date": check_date,
-                "half_day": half_day,
                 "delivery_count": delivery_count,
                 "spots_left": max_deliveries - delivery_count
             })
@@ -735,7 +719,7 @@ def get_available_dates_for_region(tenant_id: int, region_id: int, max_deliverie
     return available_dates
 
 
-def add_address_to_region(tenant_id: int, region_id: int, address: str, lat: float, lng: float, scheduled_date: date, half_day: HalfDay = HalfDay.am):
+def add_address_to_region(tenant_id: int, region_id: int, address: str, lat: float, lng: float, scheduled_date: date):
     """
     Voeg een adres toe aan een regio en herbereken het centrum.
     """
@@ -746,7 +730,6 @@ def add_address_to_region(tenant_id: int, region_id: int, address: str, lat: flo
         address_id=address_id,
         region_id=region_id,
         scheduled_date=scheduled_date,
-        half_day=half_day,
         address=address,
         latitude=lat,
         longitude=lng
@@ -776,7 +759,7 @@ def add_address_to_region(tenant_id: int, region_id: int, address: str, lat: flo
     return address_id
 
 
-def create_new_region_with_address(tenant_id: int, region_name: str, address: str, lat: float, lng: float, scheduled_date: date, half_day: HalfDay = HalfDay.am):
+def create_new_region_with_address(tenant_id: int, region_name: str, address: str, lat: float, lng: float, scheduled_date: date):
     """
     Maak een nieuwe regio aan met het adres als centrum.
     Gebruikt de tenant defaults voor radius_km en max_deliveries_per_day.
@@ -807,7 +790,6 @@ def create_new_region_with_address(tenant_id: int, region_name: str, address: st
         address_id=address_id,
         region_id=region_id,
         scheduled_date=scheduled_date,
-        half_day=half_day,
         address=address,
         latitude=lat,
         longitude=lng
