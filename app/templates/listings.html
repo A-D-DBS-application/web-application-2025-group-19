@@ -32,7 +32,6 @@
     <table class="table">
       <thead>
         <tr>
-          <th>Gemeente</th>
           <th>Product Omschrijving</th>
           <th>Status</th>
           <th>Geplande Datum</th>
@@ -42,7 +41,6 @@
       <tbody>
         {% for listing in listings %}
           <tr>
-            <td class="font-medium">{{ listing.municipality or '—' }}</td>
             <td>
               <span class="font-medium">{{ listing.product_description or '—' }}</span>
             </td>
@@ -72,10 +70,6 @@
     <div class="table-mobile-view" style="display: none;">
       {% for listing in listings %}
         <div class="table-mobile-card">
-          <div class="table-mobile-row">
-            <div class="table-mobile-label">Gemeente</div>
-            <div class="table-mobile-value font-medium">{{ listing.municipality or '—' }}</div>
-          </div>
           <div class="table-mobile-row">
             <div class="table-mobile-label">Product Omschrijving</div>
             <div class="table-mobile-value font-medium">{{ listing.product_description or '—' }}</div>

@@ -565,12 +565,15 @@ def get_delivery_overview(tenant_id: int, region_id: int = None, order_date: dat
     q = db.session.query(
         Delivery.delivery_id,
         Product.name.label('product_name'),  # Get product name/description
-        Region.name,  # Get the region/municipality from DeliveryRun's region, not Customer
+        db.func.coalesce(Customer.municipality, Region.name).label('municipality'),  # Get municipality from Customer, fallback to Region.name
         Delivery.delivery_status,
         CustomerOrder.order_date, DeliveryRun.scheduled_date, DeliveryRun.region_id
     ).outerjoin(
         CustomerOrder,
         (Delivery.tenant_id == CustomerOrder.tenant_id) & (Delivery.order_id == CustomerOrder.order_id)
+    ).outerjoin(
+        Customer,
+        (CustomerOrder.tenant_id == Customer.tenant_id) & (CustomerOrder.customer_id == Customer.customer_id)
     ).outerjoin(
         OrderItem,
         (CustomerOrder.tenant_id == OrderItem.tenant_id) & (CustomerOrder.order_id == OrderItem.order_id)
