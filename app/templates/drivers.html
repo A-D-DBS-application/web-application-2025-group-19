@@ -108,6 +108,22 @@
               Klik op dagen om ze te selecteren als beschikbaarheidsdatums. Geselecteerde dagen worden groen weergegeven.
             </p>
             
+            <!-- Time slot checkboxes (shown when a day is selected) -->
+            <div id="time-slots-container" class="mt-4 hidden">
+              <label class="form-label" id="time-slots-label">Tijdsblokken voor geselecteerde dag</label>
+              <div class="flex flex-col gap-3 mt-2">
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" id="morning-slot" class="form-checkbox">
+                  <span>Voormiddag (8:00–12:00)</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" id="afternoon-slot" class="form-checkbox">
+                  <span>Namiddag (13:00–16:00)</span>
+                </label>
+              </div>
+              <p class="text-xs text-muted mt-2">Je kunt één of beide tijdsblokken selecteren.</p>
+            </div>
+            
             <!-- Hidden input voor geselecteerde datums -->
             <input type="hidden" id="selected-dates-input" name="availability_dates" value="">
           </div>
@@ -382,7 +398,9 @@
 
 <script>
   let selectedDates = new Set(); // Set voor unieke datums
-  const monthNames = ['Januari', 'Februari', 'Maart', 'April', 'Mei', 'Juni', 
+  let dateTimeSlots = {}; // Store time slots per date: { "2024-01-15": { morning: true, afternoon: false } }
+  let currentSelectedDate = null; // Track which date is currently being configured
+  const monthNames = ['Januari', 'Februari', 'Maart', 'April', 'Mei', 'Juni',
                       'Juli', 'Augustus', 'September', 'Oktober', 'November', 'December'];
 
   document.addEventListener('DOMContentLoaded', function() {
@@ -474,18 +492,72 @@
 
   function toggleDate(dateStr) {
     if (selectedDates.has(dateStr)) {
-      selectedDates.delete(dateStr);
+      // If already selected, show time slots for this date
+      currentSelectedDate = dateStr;
+      showTimeSlotsForDate(dateStr);
     } else {
+      // Add to selection and show time slots
       selectedDates.add(dateStr);
+      currentSelectedDate = dateStr;
+      showTimeSlotsForDate(dateStr);
     }
     renderCalendar(); // Re-render om selectie te updaten
     updateSelectedDatesInput();
   }
 
+  function showTimeSlotsForDate(dateStr) {
+    const container = document.getElementById('time-slots-container');
+    const morningCheckbox = document.getElementById('morning-slot');
+    const afternoonCheckbox = document.getElementById('afternoon-slot');
+    
+    // Load existing time slots for this date if any
+    if (dateTimeSlots[dateStr]) {
+      morningCheckbox.checked = dateTimeSlots[dateStr].morning || false;
+      afternoonCheckbox.checked = dateTimeSlots[dateStr].afternoon || false;
+    } else {
+      // Default: both unchecked
+      morningCheckbox.checked = false;
+      afternoonCheckbox.checked = false;
+    }
+    
+    // Show container
+    container.classList.remove('hidden');
+    
+    // Update label to show selected date
+    const label = container.querySelector('.form-label');
+    const dateObj = new Date(dateStr + 'T00:00:00');
+    const formattedDate = dateObj.toLocaleDateString('nl-BE', { weekday: 'short', day: '2-digit', month: 'short' });
+    label.textContent = `Tijdsblokken voor ${formattedDate}`;
+    
+    // Add event listeners to save time slots when checkboxes change
+    morningCheckbox.onchange = () => saveTimeSlotsForDate(dateStr);
+    afternoonCheckbox.onchange = () => saveTimeSlotsForDate(dateStr);
+  }
+
+  function saveTimeSlotsForDate(dateStr) {
+    const morningCheckbox = document.getElementById('morning-slot');
+    const afternoonCheckbox = document.getElementById('afternoon-slot');
+    
+    dateTimeSlots[dateStr] = {
+      morning: morningCheckbox.checked,
+      afternoon: afternoonCheckbox.checked
+    };
+    
+    // Update hidden input with date and time slots info
+    updateSelectedDatesInput();
+  }
+
   function updateSelectedDatesInput() {
-    // Update hidden input met alle geselecteerde datums (comma-separated)
-    const sortedDates = Array.from(selectedDates).sort();
-    document.getElementById('selected-dates-input').value = sortedDates.join(',');
+    // Format: "2024-01-15:morning,afternoon|2024-01-16:morning"
+    const formattedDates = Array.from(selectedDates).sort().map(dateStr => {
+      const slots = dateTimeSlots[dateStr] || { morning: false, afternoon: false };
+      const slotParts = [];
+      if (slots.morning) slotParts.push('morning');
+      if (slots.afternoon) slotParts.push('afternoon');
+      const slotStr = slotParts.length > 0 ? ':' + slotParts.join(',') : '';
+      return dateStr + slotStr;
+    });
+    document.getElementById('selected-dates-input').value = formattedDates.join('|');
   }
 </script>
 {% endblock %}

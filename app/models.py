@@ -181,6 +181,8 @@ class Availability(db.Model):
     employee_id     = db.Column(db.Integer, nullable=False)
     available_date  = db.Column(db.Date, nullable=False)
     active          = db.Column(db.Boolean, default=True)
+    morning_slot    = db.Column(db.Boolean, default=False, nullable=False)  # Voormiddag (8:00-12:00)
+    afternoon_slot  = db.Column(db.Boolean, default=False, nullable=False)  # Namiddag (13:00-16:00)
     __table_args__ = (
         ForeignKeyConstraint(["tenant_id", "employee_id"],
                              ["employee.tenant_id", "employee.employee_id"],
@@ -351,17 +353,19 @@ TIME_SLOT_RULES = {
 
 # ---------- Helper functies ----------
 
-def set_employee_availability(tenant_id: int, employee_id: int, available_date: date, active: bool = True):
+def set_employee_availability(tenant_id: int, employee_id: int, available_date: date, active: bool = True, morning_slot: bool = False, afternoon_slot: bool = False):
     av = Availability.query.filter_by(
         tenant_id=tenant_id, employee_id=employee_id, available_date=available_date
     ).first()
     if av:
         av.active = active
+        av.morning_slot = morning_slot
+        av.afternoon_slot = afternoon_slot
     else:
         availability_id = get_next_availability_id(tenant_id)
         av = Availability(
             tenant_id=tenant_id, availability_id=availability_id, employee_id=employee_id,
-            available_date=available_date, active=active
+            available_date=available_date, active=active, morning_slot=morning_slot, afternoon_slot=afternoon_slot
         )
         db.session.add(av)
     db.session.commit()

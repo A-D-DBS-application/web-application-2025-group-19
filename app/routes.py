@@ -625,27 +625,57 @@ def add_driver():
         db.session.commit()
         current_app.logger.info(f"Committed employee {first} {last} with ID {employee_id_val}")
         
-        # Parse availability dates (comma-separated)
+        # Parse availability dates with time slots (format: "2024-01-15:morning,afternoon|2024-01-16:morning")
         availability_dates = []
         if availability_dates_str:
-            date_strings = [d.strip() for d in availability_dates_str.split(',') if d.strip()]
-            for date_str in date_strings:
+            # Split by | to get individual date entries
+            date_entries = [d.strip() for d in availability_dates_str.split('|') if d.strip()]
+            for entry in date_entries:
                 try:
+                    # Check if entry has time slots (contains ':')
+                    if ':' in entry:
+                        date_str, slots_str = entry.split(':', 1)
+                        morning_slot = 'morning' in slots_str
+                        afternoon_slot = 'afternoon' in slots_str
+                    else:
+                        # No time slots specified, default to both
+                        date_str = entry
+                        morning_slot = True
+                        afternoon_slot = True
+                    
                     availability_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-                    availability_dates.append(availability_date)
-                except ValueError:
-                    current_app.logger.warning(f"Invalid date format: {date_str}")
+                    availability_dates.append({
+                        'date': availability_date,
+                        'morning_slot': morning_slot,
+                        'afternoon_slot': afternoon_slot
+                    })
+                except ValueError as e:
+                    current_app.logger.warning(f"Invalid date format: {entry}, error: {e}")
         
-        # If no dates provided, use today as default
+        # If no dates provided, use today as default (with both time slots)
         if not availability_dates:
-            availability_dates = [date.today()]
+            availability_dates = [{
+                'date': date.today(),
+                'morning_slot': True,
+                'afternoon_slot': True
+            }]
         
-        # Set availability for all selected dates
+        # Set availability for all selected dates with time slots
         # Get next availability_id using the helper function
         availability_errors = []
         
-        for availability_date in availability_dates:
+        for entry in availability_dates:
             try:
+                if isinstance(entry, dict):
+                    availability_date = entry['date']
+                    morning_slot = entry.get('morning_slot', True)
+                    afternoon_slot = entry.get('afternoon_slot', True)
+                else:
+                    # Fallback for old format
+                    availability_date = entry
+                    morning_slot = True
+                    afternoon_slot = True
+                
                 # Check if availability already exists
                 existing = Availability.query.filter_by(
                     tenant_id=tid, employee_id=employee_id_val, available_date=availability_date
@@ -725,6 +755,8 @@ def schedule():
     region_name = request.form.get("region_id")  # Municipality name (optional)
     municipality = request.form.get("municipality", "").strip()  # Gemeente (optioneel, wordt uit adres gehaald indien niet opgegeven)
     scheduled_date_str = request.form.get("scheduled_date")
+    start_time = request.form.get("start_time", "").strip()
+    end_time = request.form.get("end_time", "").strip()
     
     # Extract municipality from address if not provided
     if not municipality and address:
@@ -1258,8 +1290,8 @@ def trucks_list():
     
     # Get truck types for dropdown
     truck_types = [{"value": t.name, "label": t.value} for t in TruckType]
-    
-    return render_template("trucks.html", trucks=truck_list, truck_types=truck_types)
+
+    return render_template("trucks.html", trucks=truck_list, truck_types=truck_types, TruckType=TruckType)
 
 
 @main.route("/truck/<int:truck_id>/delete", methods=["POST"])
@@ -1429,9 +1461,20 @@ def add_truck():
         truck_type = None
         if truck_type_str:
             try:
+                # Try to get by enum name (e.g., "bestelwagen")
                 truck_type = TruckType[truck_type_str]
             except KeyError:
-                truck_type = TruckType.bestelwagen
+                # If not found by name, try to find by value (e.g., "Bestelwagen")
+                try:
+                    truck_type = next((t for t in TruckType if t.value == truck_type_str), None)
+                except:
+                    pass
+                # Default to bestelwagen if still not found
+                if not truck_type:
+                    truck_type = TruckType.bestelwagen
+        else:
+            # No truck type selected, use default
+            truck_type = TruckType.bestelwagen
         
         # Parse purchase date
         purchase_date = None
@@ -1441,35 +1484,89 @@ def add_truck():
             except ValueError:
                 pass
         
-        # Check for duplicate license plate
-        if license_plate:
-            existing = Truck.query.filter_by(tenant_id=tid, license_plate=license_plate, active=True).first()
+        # Check for duplicate license plate (only if license plate is provided and not empty)
+        license_plate_clean = license_plate.strip() if license_plate else None
+        if license_plate_clean:
+            existing = Truck.query.filter_by(
+                tenant_id=tid, 
+                license_plate=license_plate_clean, 
+                active=True
+            ).first()
             if existing:
-                flash(f"Er bestaat al een truck met nummerplaat {license_plate}.", "error")
+                flash(f"Er bestaat al een truck met nummerplaat {license_plate_clean}.", "error")
                 return redirect(url_for("main.trucks_list"))
         
         # Create new truck
         truck_id = get_next_truck_id(tid)
-        truck = Truck(
-            tenant_id=tid,
-            truck_id=truck_id,
-            name=name,
-            color=color or None,
-            truck_type=truck_type,
-            capacity=capacity or None,
-            license_plate=license_plate or None,
-            purchase_date=purchase_date,
-            active=True
-        )
-        db.session.add(truck)
+        
+        # Prepare truck data
+        truck_data = {
+            'tenant_id': tid,
+            'truck_id': truck_id,
+            'name': name.strip(),
+            'color': color.strip() if color and color.strip() else None,
+            'truck_type': truck_type,
+            'capacity': capacity.strip() if capacity and capacity.strip() else None,
+            'license_plate': license_plate_clean,  # Use cleaned license plate
+            'purchase_date': purchase_date,
+            'active': True
+        }
+        
+        # Check database type for proper insertion
+        db_uri = current_app.config.get("SQLALCHEMY_DATABASE_URI", "") or ""
+        if db_uri.startswith("sqlite:"):
+            # SQLite: direct ORM insert
+            truck = Truck(**truck_data)
+            db.session.add(truck)
+            db.session.flush()
+        else:
+            # PostgreSQL: use raw SQL with OVERRIDING SYSTEM VALUE
+            sql = text("""
+            INSERT INTO truck (tenant_id, truck_id, name, color, truck_type, capacity, license_plate, purchase_date, active)
+            VALUES (:tenant_id, :truck_id, :name, :color, :truck_type, :capacity, :license_plate, :purchase_date, :active)
+            OVERRIDING SYSTEM VALUE
+            RETURNING id, truck_id
+            """)
+            params = {
+                "tenant_id": tid,
+                "truck_id": truck_id,
+                "name": truck_data['name'],
+                "color": truck_data['color'],
+                "truck_type": truck_type.value if hasattr(truck_type, 'value') else str(truck_type),
+                "capacity": truck_data['capacity'],
+                "license_plate": license_plate_clean,
+                "purchase_date": purchase_date,
+                "active": True
+            }
+            res = db.session.execute(sql, params)
+            row = res.fetchone()
+            if row is None:
+                db.session.rollback()
+                flash("Kon truck niet toevoegen (databasefout).", "error")
+                return redirect(url_for("main.trucks_list"))
+            db.session.flush()
+        
         db.session.commit()
         
         flash(f"Truck '{name}' succesvol toegevoegd.", "success")
-        current_app.logger.info(f"Added truck: {name} ({license_plate})")
+        current_app.logger.info(f"Added truck: {name} (ID: {truck_id}, License: {license_plate_clean or 'N/A'}, Type: {truck_type.value if truck_type else 'N/A'})")
     except Exception as e:
         db.session.rollback()
         current_app.logger.exception(f"Error adding truck: {e}")
-        flash("Fout bij het toevoegen van truck.", "error")
+        # Provide more specific error message
+        error_msg = str(e)
+        import traceback
+        current_app.logger.error(f"Full traceback: {traceback.format_exc()}")
+        
+        if "uq_truck_tenant_license" in error_msg or "UNIQUE constraint" in error_msg or "unique constraint" in error_msg.lower():
+            flash("Er bestaat al een truck met deze nummerplaat.", "error")
+        elif "NOT NULL constraint" in error_msg or "not null constraint" in error_msg.lower():
+            flash("Vul alle verplichte velden in.", "error")
+        elif "foreign key" in error_msg.lower():
+            flash("Fout: Ongeldige referentie in database.", "error")
+        else:
+            # Show first 150 characters of error for debugging
+            flash(f"Fout bij het toevoegen van truck: {error_msg[:150]}", "error")
     
     return redirect(url_for("main.trucks_list"))
 
