@@ -1,20 +1,20 @@
 {% extends 'base.html' %}
-{% block title %}Chauffeurs — Delivery Schedule{% endblock %}
+{% block title %}Bezorgers — Delivery Schedule{% endblock %}
 
 {% block content %}
 <div class="page-header">
-  <h1 class="page-title">Chauffeurs</h1>
-  <p class="page-subtitle">Beheer je team van chauffeurs en hun beschikbaarheid.</p>
+  <h1 class="page-title">Bezorgers</h1>
+  <p class="page-subtitle">Beheer je bezorgers (chauffeurs & helpers) en hun beschikbaarheid.</p>
 </div>
 
-<!-- Chauffeur Toevoegen -->
+<!-- Bezorger Toevoegen -->
 <div class="card mb-5">
   <div class="card-header">
     <h2 class="font-semibold flex items-center gap-2">
       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
         <path stroke-linecap="round" stroke-linejoin="round" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM4 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 0110.374 21c-2.331 0-4.512-.645-6.374-1.766z" />
       </svg>
-      Chauffeur Toevoegen
+      Bezorger Toevoegen
     </h2>
   </div>
   <div class="card-body">
@@ -31,6 +31,13 @@
         <div class="form-group">
           <label class="form-label">E-mailadres</label>
           <input type="email" name="email" placeholder="jan.janssen@bedrijf.be" class="form-input" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Categorie</label>
+          <select name="role" class="form-select">
+            <option value="driver" selected>Chauffeur</option>
+            <option value="helper">Helper (grote levering)</option>
+          </select>
         </div>
       </div>
       
@@ -82,7 +89,7 @@
       </div>
       
       <div class="mt-4">
-        <button type="submit" class="btn btn-primary">Chauffeur toevoegen</button>
+        <button type="submit" class="btn btn-primary">Bezorger toevoegen</button>
       </div>
     </form>
   </div>
@@ -90,7 +97,7 @@
 
 <div class="divider"></div>
 
-<!-- Overzicht Chauffeurs -->
+<!-- Overzicht Bezorgers -->
 <div class="table-container">
   <div class="card-header flex justify-between items-center">
     <div>
@@ -98,7 +105,7 @@
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
         </svg>
-        Overzicht Chauffeurs
+        Overzicht Bezorgers
       </h2>
     </div>
   </div>
@@ -116,12 +123,15 @@
       <tbody>
         {% for driver in drivers %}
           <tr>
-            <td>
-              <div class="flex items-center gap-2">
-                <div style="width: 32px; height: 32px; border-radius: 50%; background: var(--color-navy); color: white; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 600;">
-                  {% if driver.name and driver.name|length > 0 %}{{ driver.name[0] | upper }}{% else %}{{ driver.first_name[0] | upper if driver.first_name else '?' }}{% endif %}
-                </div>
-                <span class="font-medium">{{ driver.name or (driver.first_name + ' ' + driver.last_name) }}</span>
+            <td class="name-col">
+              <span class="font-medium">{{ driver.name or (driver.first_name + ' ' + driver.last_name) }}</span>
+              {% set role_val = driver.role.value if driver.role is defined and driver.role is not string else driver.role %}
+              <div class="role-badge-wrap">
+                {% if role_val == 'helper' %}
+                  <span class="badge badge-default role-badge">Helper</span>
+                {% else %}
+                  <span class="badge badge-default role-badge">Chauffeur</span>
+                {% endif %}
               </div>
             </td>
             <td>{{ driver.email or '—' }}</td>
@@ -159,6 +169,11 @@
             <div class="table-mobile-label">Naam</div>
             <div class="table-mobile-value font-medium">
               {{ driver.name or (driver.first_name + ' ' + driver.last_name) }}
+              {% if driver.role == 'helper' or (driver.role and driver.role.value == 'helper') %}
+                <span class="badge badge-default" style="margin-left: 6px;">Helper</span>
+              {% else %}
+                <span class="badge badge-default" style="margin-left: 6px;">Chauffeur</span>
+              {% endif %}
             </div>
           </div>
           <div class="table-mobile-row">
@@ -195,7 +210,12 @@
       {% endfor %}
     </div>
     <div class="card-footer">
-      <p class="text-small text-muted">Totaal: <strong>{{ drivers | length }}</strong> chauffeur{% if drivers | length != 1 %}s{% endif %}</p>
+      {% set total_drivers = drivers | selectattr('role', 'equalto', 'driver') | list | length + (drivers | selectattr('role', 'equalto', EmployeeRole.driver) | list | length if EmployeeRole is defined else 0) %}
+      {% set total_helpers = drivers | selectattr('role', 'equalto', 'helper') | list | length + (drivers | selectattr('role', 'equalto', EmployeeRole.helper) | list | length if EmployeeRole is defined else 0) %}
+      <p class="text-small text-muted">
+        Totaal: <strong>{{ total_drivers + total_helpers }}</strong> bezorgers
+        — chauffeurs: <strong>{{ total_drivers }}</strong>, helpers: <strong>{{ total_helpers }}</strong>
+      </p>
     </div>
   {% else %}
     <div class="empty-state">

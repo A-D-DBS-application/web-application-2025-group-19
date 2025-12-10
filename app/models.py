@@ -56,6 +56,7 @@ class EmployeeRole(enum.Enum):
     seller = "seller"
     driver = "driver"
     manager = "manager"
+    helper = "helper"
     admin = "admin"
 
 class OrderStatus(enum.Enum):

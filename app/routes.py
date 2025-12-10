@@ -323,6 +323,7 @@ def register():
     first = request.form.get("firstname", "").strip()
     last  = request.form.get("lastname", "").strip()
     email = request.form.get("email", "").strip().lower()
+    role_choice = request.form.get("role", "driver").strip().lower()
     password = request.form.get("password", "")   # UI-veld; niet opgeslagen (geen kolom in DB)
 
     if not first or not last or not email or not password:
@@ -519,6 +520,7 @@ def add_driver():
     first = request.form.get("first_name", "").strip()
     last = request.form.get("last_name", "").strip()
     email = request.form.get("email", "").strip().lower()
+    role_choice = (request.form.get("role", "driver") or "driver").strip().lower()
     availability_dates_str = request.form.get("availability_dates", "").strip()
 
     if not first or not last or not email:
@@ -528,6 +530,9 @@ def add_driver():
     tid = tenant_id()
     current_employee_id = session.get("employee_id")
     
+    # Determine role (chauffeur of helper)
+    role_enum = EmployeeRole.helper if role_choice == "helper" else EmployeeRole.driver
+
     # Check if email already exists
     existing_emp = Employee.query.filter_by(tenant_id=tid, email=email).first()
     
@@ -545,7 +550,7 @@ def add_driver():
             if last and last != emp.last_name:
                 emp.last_name = last
             # Update role to driver so they can be used as a driver
-            emp.role = EmployeeRole.driver
+            emp.role = role_enum
         else:
             # Different person with same email: prevent duplicate
             flash("E-mailadres bestaat al voor een andere medewerker.", "error")
@@ -557,7 +562,7 @@ def add_driver():
         if db_uri.startswith("sqlite:"):
             emp = Employee(
                 tenant_id=tid, employee_id=next_emp_id, first_name=first, last_name=last, email=email,
-                role=EmployeeRole.driver, active=True
+                role=role_enum, active=True
             )
             db.session.add(emp)
             db.session.flush()  # Get the id before commit
@@ -577,7 +582,7 @@ def add_driver():
                 "first_name": first,
                 "last_name": last,
                 "email": email,
-                "role": EmployeeRole.driver.value if hasattr(EmployeeRole, 'driver') else 'driver',
+                "role": role_enum.value if hasattr(EmployeeRole, 'driver') else 'driver',
                 "active": True,
             }
             res = db.session.execute(sql, params)
@@ -1276,10 +1281,10 @@ def drivers_list():
     today = date.today()
     
     try:
-        # First, get all active drivers
+        # First, get all active bezorgers (drivers + helpers)
         all_drivers = db.session.query(Employee).filter(
             Employee.tenant_id == tid,
-            Employee.role == EmployeeRole.driver,
+            Employee.role.in_([EmployeeRole.driver, EmployeeRole.helper]),
             Employee.active.is_(True)
         ).order_by(Employee.last_name.asc()).all()
         
@@ -1319,13 +1324,14 @@ def drivers_list():
                 "email": driver.email,
                 "available_date": first_available_date,
                 "available_dates": available_dates,
-                "available_today": available_today
+                "available_today": available_today,
+                "role": driver.role.value if hasattr(driver.role, "value") else driver.role
             })
     except Exception as e:
         current_app.logger.exception(f"Error fetching drivers: {e}")
         driver_list = []
     
-    return render_template("drivers.html", drivers=driver_list)
+    return render_template("drivers.html", drivers=driver_list, EmployeeRole=EmployeeRole)
 
 
 @main.route("/driver/<int:employee_id>/delete", methods=["POST"])
@@ -1338,8 +1344,10 @@ def delete_driver(employee_id):
     tid = tenant_id()
     try:
         # Find the driver
-        driver = Employee.query.filter_by(
-            tenant_id=tid, employee_id=employee_id, role=EmployeeRole.driver
+        driver = Employee.query.filter(
+            Employee.tenant_id == tid,
+            Employee.employee_id == employee_id,
+            Employee.role.in_([EmployeeRole.driver, EmployeeRole.helper])
         ).first()
         
         if not driver:

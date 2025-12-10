@@ -41,7 +41,7 @@
           <a href="{{ url_for('main.index') }}" class="nav-link {% if request.endpoint == 'main.index' %}active{% endif %}">Dashboard</a>
           <a href="{{ url_for('main.add_listing') }}" class="nav-link {% if request.endpoint == 'main.add_listing' %}active{% endif %}">Nieuwe Levering</a>
           <a href="{{ url_for('main.listings') }}" class="nav-link {% if request.endpoint == 'main.listings' %}active{% endif %}">Leveringen</a>
-          <a href="{{ url_for('main.drivers_list') }}" class="nav-link {% if request.endpoint == 'main.drivers_list' or request.endpoint == 'main.drivers' %}active{% endif %}">Chauffeurs</a>
+          <a href="{{ url_for('main.drivers_list') }}" class="nav-link {% if request.endpoint == 'main.drivers_list' or request.endpoint == 'main.drivers' %}active{% endif %}">Bezorgers</a>
           <a href="{{ url_for('main.trucks_list') }}" class="nav-link {% if request.endpoint == 'main.trucks_list' %}active{% endif %}">Trucks</a>
         {% endif %}
       </div>
