@@ -13,9 +13,9 @@ from .models import (
     find_matching_regions, get_suggested_dates_for_address, add_address_to_region,
     create_new_region_with_address, count_deliveries_for_region_date, haversine_distance,
     get_next_truck_id, get_next_employee_id, get_next_availability_id, get_capacity_info_for_date, count_available_drivers_for_date,
-    count_available_trucks, count_active_regions_for_date
+    count_available_trucks, count_active_regions_for_date, count_available_helpers_for_date
 )
-from sqlalchemy import text
+from sqlalchemy import text, or_, cast, String
 
 # Mapbox API configuratie - wordt uit config geladen
 def get_mapbox_token():
@@ -513,99 +513,145 @@ def availability():
 
 @main.route("/add-driver", methods=["POST"])
 def add_driver():
+    """Allow drivers to register/manage their availability by name only."""
     if "employee_id" not in session:
-        flash("Log in om chauffeurs toe te voegen.", "error")
+        flash("Log in om je beschikbaarheid in te stellen.", "error")
         return redirect(url_for("main.login"))
 
     first = request.form.get("first_name", "").strip()
     last = request.form.get("last_name", "").strip()
-    email = request.form.get("email", "").strip().lower()
     role_choice = (request.form.get("role", "driver") or "driver").strip().lower()
+    action = request.form.get("action", "add")  # "add" or "remove" for dates
     availability_dates_str = request.form.get("availability_dates", "").strip()
 
-    if not first or not last or not email:
-        flash("Vul voornaam, achternaam en e-mail in.", "error")
+    if not first or not last:
+        flash("Vul voornaam en achternaam in.", "error")
         return redirect(url_for("main.drivers_list"))
 
     tid = tenant_id()
-    current_employee_id = session.get("employee_id")
     
-    # Determine role (chauffeur of helper)
+    # Determine role based on form input
     role_enum = EmployeeRole.helper if role_choice == "helper" else EmployeeRole.driver
-
-    # Check if email already exists
-    existing_emp = Employee.query.filter_by(tenant_id=tid, email=email).first()
     
-    employee_id_val = None  # Initialize the variable
+    # For PostgreSQL, ensure helper enum value exists before using it
+    db_uri = current_app.config.get("SQLALCHEMY_DATABASE_URI", "") or ""
+    if not db_uri.startswith("sqlite:") and role_enum.value == "helper":
+        try:
+            # Check if 'helper' exists in the enum type
+            check_sql = text("""
+            SELECT 1 FROM pg_enum 
+            WHERE enumlabel = 'helper' 
+            AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'employee_role')
+            """)
+            result = db.session.execute(check_sql).fetchone()
+            if not result:
+                # Add 'helper' to the enum type - must be done outside transaction
+                current_app.logger.info("Adding 'helper' value to employee_role enum type")
+                # Commit any pending transaction first
+                db.session.commit()
+                try:
+                    # Use a completely separate connection for DDL to ensure it's committed separately
+                    from sqlalchemy import create_engine
+                    engine = db.get_engine()
+                    # Create a new connection just for the DDL
+                    with engine.connect() as ddl_conn:
+                        # Execute DDL in autocommit mode
+                        ddl_conn = ddl_conn.execution_options(autocommit=True)
+                        ddl_conn.execute(text("ALTER TYPE employee_role ADD VALUE 'helper'"))
+                        ddl_conn.commit()
+                    current_app.logger.info("Successfully added 'helper' to employee_role enum")
+                    
+                    # Close current session to force new connection that sees the new enum
+                    db.session.close()
+                    # Get a fresh connection
+                    db.session.connection()
+                except Exception as alter_e:
+                    error_str = str(alter_e)
+                    if "already exists" not in error_str.lower():
+                        current_app.logger.error(f"Failed to add 'helper' enum value: {alter_e}")
+                        # Fall back to driver if we can't add helper
+                        role_enum = EmployeeRole.driver
+                        flash("Kon 'helper' enum waarde niet toevoegen. Gebruikt 'driver' in plaats daarvan.", "warning")
+        except Exception as e:
+            current_app.logger.warning(f"Error checking/adding helper enum: {e}")
+    
+    # Find or create driver by name (not email)
+    # First, look for existing active driver with matching name
+    existing_emp = Employee.query.filter_by(
+        tenant_id=tid, 
+        first_name=first, 
+        last_name=last,
+        active=True
+    ).first()
     
     if existing_emp:
-        # Check if it's the same person (current logged-in user)
-        if existing_emp.employee_id == current_employee_id:
-            # Same person: use existing employee, update info if needed, and add availability
-            emp = existing_emp
-            employee_id_val = emp.employee_id  # Set the employee_id
-            # Update name if provided (user might want to correct it)
-            if first and first != emp.first_name:
-                emp.first_name = first
-            if last and last != emp.last_name:
-                emp.last_name = last
-            # Update role to driver so they can be used as a driver
-            emp.role = role_enum
-        else:
-            # Different person with same email: prevent duplicate
-            flash("E-mailadres bestaat al voor een andere medewerker.", "error")
-            return redirect(url_for("main.drivers_list"))
+        # Driver exists, use their ID and update role if needed
+        emp = existing_emp
+        employee_id_val = emp.employee_id
+        # Update role if it changed
+        if emp.role != role_enum:
+            try:
+                emp.role = role_enum
+                db.session.commit()
+            except Exception as e:
+                error_str = str(e)
+                if "invalid input value for enum" in error_str.lower():
+                    db.session.rollback()
+                    current_app.logger.error(f"Enum value error when updating role: {e}")
+                    flash(f"Fout: De enum waarde '{role_enum.value}' bestaat niet in de database. Neem contact op met de beheerder.", "error")
+                    return redirect(url_for("main.drivers_list"))
+                else:
+                    raise
     else:
-        # Email doesn't exist: create new employee
-        next_emp_id = get_next_employee_id(tid)
-        db_uri = current_app.config.get("SQLALCHEMY_DATABASE_URI", "") or ""
-        if db_uri.startswith("sqlite:"):
+        # No active employee found, check if there's an inactive one with the same email
+        # Generate base email from name
+        base_email = f"{first.lower()}.{last.lower().replace(' ', '')}@driver.local"
+        
+        # Check if an employee with this email already exists (active or inactive)
+        existing_by_email = Employee.query.filter_by(
+            tenant_id=tid,
+            email=base_email
+        ).first()
+        
+        if existing_by_email:
+            # Employee with this email exists, reactivate and update
+            emp = existing_by_email
+            employee_id_val = emp.employee_id
+            emp.active = True
+            emp.role = role_enum
+            # Update name in case it changed
+            emp.first_name = first
+            emp.last_name = last
+            db.session.commit()
+            current_app.logger.info(f"Reactivated existing driver: {first} {last} (ID: {employee_id_val}, role: {role_enum})")
+        else:
+            # Create new driver with unique email
+            next_emp_id = get_next_employee_id(tid)
+            email = base_email
+            
+            # Ensure email is unique by adding a number if needed
+            counter = 1
+            while Employee.query.filter_by(tenant_id=tid, email=email).first() is not None:
+                email = f"{first.lower()}.{last.lower().replace(' ', '')}{counter}@driver.local"
+                counter += 1
+            
             emp = Employee(
-                tenant_id=tid, employee_id=next_emp_id, first_name=first, last_name=last, email=email,
-                role=role_enum, active=True
+                tenant_id=tid, 
+                employee_id=next_emp_id, 
+                first_name=first, 
+                last_name=last, 
+                email=email,
+                role=role_enum, 
+                active=True
             )
             db.session.add(emp)
-            db.session.flush()  # Get the id before commit
-            employee_id_val = emp.employee_id  # Set the employee_id
-        else:
-            # Postgres: insert with OVERRIDING SYSTEM VALUE
-            sql = text("""
-            INSERT INTO employee (tenant_id, employee_id, location_id, first_name, last_name, email, role, active)
-            VALUES (:tenant_id, :employee_id, :location_id, :first_name, :last_name, :email, :role, :active)
-            OVERRIDING SYSTEM VALUE
-            RETURNING id, employee_id
-            """)
-            params = {
-                "tenant_id": tid,
-                "employee_id": next_emp_id,
-                "location_id": None,
-                "first_name": first,
-                "last_name": last,
-                "email": email,
-                "role": role_enum.value if hasattr(EmployeeRole, 'driver') else 'driver',
-                "active": True,
-            }
-            res = db.session.execute(sql, params)
-            row = res.fetchone()
-            if row is None:
-                db.session.rollback()
-                flash("Kon chauffeur niet toevoegen (databasefout).", "error")
-                return redirect(url_for("main.drivers_list"))
             db.session.flush()
-            employee_id_val = row[1]  # Set the employee_id from PostgreSQL result
-
-    # Ensure employee_id_val is set
-    if employee_id_val is None:
-        db.session.rollback()
-        flash("Fout: Kon employee ID niet bepalen.", "error")
-        return redirect(url_for("main.drivers_list"))
+            employee_id_val = emp.employee_id
+            # Commit the employee immediately so it's available for queries
+            db.session.commit()
+            current_app.logger.info(f"Created new driver: {first} {last} (ID: {employee_id_val}, role: {role_enum}, email: {email})")
 
     try:
-        # Commit employee first to ensure it exists before adding availability
-        # This is important for foreign key constraints
-        db.session.commit()
-        current_app.logger.info(f"Committed employee {first} {last} with ID {employee_id_val}")
-        
         # Parse availability dates (comma-separated)
         availability_dates = []
         if availability_dates_str:
@@ -616,30 +662,54 @@ def add_driver():
                     availability_dates.append(availability_date)
                 except ValueError:
                     current_app.logger.warning(f"Invalid date format: {date_str}")
-        
-        # If no dates provided, use today as default
+
         if not availability_dates:
-            availability_dates = [date.today()]
-        
-        # Set availability for all selected dates
-        # Get next availability_id using the helper function
-        availability_errors = []
-        
-        for availability_date in availability_dates:
-            try:
-                # Check if availability already exists
+            flash("Geen geldige datums opgegeven.", "error")
+            return redirect(url_for("main.drivers_list"))
+
+        # Handle add or remove dates
+        if action == "remove":
+            # Remove availability for specified dates
+            removed_count = 0
+            for availability_date in availability_dates:
                 existing = Availability.query.filter_by(
-                    tenant_id=tid, employee_id=employee_id_val, available_date=availability_date
+                    tenant_id=tid, 
+                    employee_id=employee_id_val, 
+                    available_date=availability_date
                 ).first()
                 
                 if existing:
-                    # Update existing record
-                    existing.active = True
-                    current_app.logger.info(f"Updated existing availability for {first} {last} on {availability_date}")
+                    existing.active = False  # Mark as inactive instead of deleting
+                    removed_count += 1
+            
+            db.session.commit()
+            
+            if removed_count > 0:
+                if len(availability_dates) == 1:
+                    flash(f"Beschikbaarheid verwijderd voor {availability_dates[0].strftime('%d-%m-%Y')}.", "success")
+                else:
+                    flash(f"Beschikbaarheid verwijderd voor {removed_count} datums.", "success")
+            else:
+                flash("Geen beschikbaarheid gevonden om te verwijderen.", "warning")
+        else:
+            # Add availability for specified dates
+            added_dates = []
+            for availability_date in availability_dates:
+                # Check if availability already exists
+                existing = Availability.query.filter_by(
+                    tenant_id=tid, 
+                    employee_id=employee_id_val, 
+                    available_date=availability_date
+                ).first()
+                
+                if existing:
+                    # Reactivate if it was previously removed
+                    if not existing.active:
+                        existing.active = True
+                        added_dates.append(availability_date)
                 else:
                     # Create new availability record
                     availability_id = get_next_availability_id(tid)
-                    
                     av = Availability(
                         tenant_id=tid, 
                         availability_id=availability_id, 
@@ -648,38 +718,24 @@ def add_driver():
                         active=True
                     )
                     db.session.add(av)
-                    current_app.logger.info(f"Added new availability for {first} {last} on {availability_date} (ID: {availability_id})")
-                
-            except Exception as e:
-                current_app.logger.exception(f"Failed to set availability for {availability_date}: {e}")
-                availability_errors.append(str(availability_date))
-        
-        # Commit all availability records
-        if availability_errors:
-            db.session.commit()  # Commit what we can
-            flash(f"Chauffeur {first} {last} toegevoegd, maar beschikbaarheid kon niet worden ingesteld voor: {', '.join(availability_errors)}", "warning")
-            return redirect(url_for("main.drivers_list"))
-        
-        db.session.commit()
-        
-        # Create success message with all dates
-        if len(availability_dates) == 1:
-            flash(f"Chauffeur {first} {last} toegevoegd en beschikbaar gemaakt voor {availability_dates[0].strftime('%d-%m-%Y')}.", "success")
-        else:
-            dates_str = ", ".join([d.strftime('%d-%m-%Y') for d in sorted(availability_dates)])
-            flash(f"Chauffeur {first} {last} toegevoegd en beschikbaar gemaakt voor {len(availability_dates)} datums: {dates_str}.", "success")
+                    added_dates.append(availability_date)
+            
+            db.session.commit()
+            
+            if added_dates:
+                if len(added_dates) == 1:
+                    flash(f"Beschikbaarheid toegevoegd voor {added_dates[0].strftime('%d-%m-%Y')}.", "success")
+                else:
+                    dates_str = ", ".join([d.strftime('%d-%m-%Y') for d in sorted(added_dates)])
+                    flash(f"Beschikbaarheid toegevoegd voor {len(added_dates)} datums: {dates_str}.", "success")
+            else:
+                flash("Alle opgegeven datums waren al beschikbaar.", "info")
         
         return redirect(url_for("main.drivers_list"))
     except Exception as e:
         db.session.rollback()
-        current_app.logger.exception(f"Error adding driver: {e}")
-        error_msg = str(e)
-        # Show more detailed error message to help debug
-        if "NOT NULL" in error_msg or "constraint" in error_msg.lower():
-            flash(f"Fout bij het toevoegen van chauffeur: Database constraint error. Details: {error_msg[:100]}", "error")
-        else:
-            flash(f"Fout bij het toevoegen van chauffeur: {error_msg[:150]}", "error")
-    
+        current_app.logger.exception(f"Error managing driver availability: {e}")
+        flash(f"Fout bij het beheren van beschikbaarheid: {str(e)[:150]}", "error")
         return redirect(url_for("main.drivers_list"))
 
 # --- Suggesties per regio ---
@@ -702,6 +758,7 @@ def schedule():
 
     tid = tenant_id()
     product_description = request.form.get("product_description", "").strip()
+    delivery_hour = request.form.get("delivery_hour", "").strip()
     address = request.form.get("address")
     region_name = request.form.get("region_id")  # Municipality name (optional)
     municipality = request.form.get("municipality", "").strip()  # Gemeente (optioneel, wordt uit adres gehaald indien niet opgegeven)
@@ -1282,11 +1339,30 @@ def drivers_list():
     
     try:
         # First, get all active bezorgers (drivers + helpers)
+        # Try multiple query approaches to handle PostgreSQL enum correctly
+        # First try with enum objects
         all_drivers = db.session.query(Employee).filter(
             Employee.tenant_id == tid,
-            Employee.role.in_([EmployeeRole.driver, EmployeeRole.helper]),
+            or_(Employee.role == EmployeeRole.driver, Employee.role == EmployeeRole.helper),
             Employee.active.is_(True)
         ).order_by(Employee.last_name.asc()).all()
+        
+        # If no results, try with enum values (for debugging)
+        if not all_drivers:
+            current_app.logger.warning(f"No drivers found with enum query for tenant {tid}, trying alternative query")
+            # Try querying all employees to see what's in the database
+            all_employees = db.session.query(Employee).filter(
+                Employee.tenant_id == tid,
+                Employee.active.is_(True)
+            ).all()
+            current_app.logger.info(f"Found {len(all_employees)} active employees total")
+            for e in all_employees:
+                current_app.logger.info(f"  - {e.first_name} {e.last_name} (ID: {e.employee_id}, role: {e.role} (type: {type(e.role)}), active: {e.active})")
+        
+        # Debug: log what we found
+        current_app.logger.info(f"Found {len(all_drivers)} drivers/helpers for tenant {tid}")
+        for d in all_drivers:
+            current_app.logger.info(f"  - {d.first_name} {d.last_name} (ID: {d.employee_id}, role: {d.role}, active: {d.active})")
         
         driver_list = []
         

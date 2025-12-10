@@ -28,16 +28,19 @@
           <label class="form-label">Achternaam</label>
           <input type="text" name="last_name" placeholder="Janssen" class="form-input" required>
         </div>
-        <div class="form-group">
-          <label class="form-label">E-mailadres</label>
-          <input type="email" name="email" placeholder="jan.janssen@bedrijf.be" class="form-input" required>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Categorie</label>
-          <select name="role" class="form-select">
-            <option value="driver" selected>Chauffeur</option>
-            <option value="helper">Helper (grote levering)</option>
-          </select>
+      </div>
+      
+      <div class="form-group mt-4">
+        <label class="form-label">Heeft bijchauffeur?</label>
+        <div style="display: flex; gap: 1.5rem; margin-top: 0.5rem;">
+          <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+            <input type="radio" name="role" value="driver" checked style="cursor: pointer;">
+            <span>Nee</span>
+          </label>
+          <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+            <input type="radio" name="role" value="helper" style="cursor: pointer;">
+            <span>Ja</span>
+          </label>
         </div>
       </div>
       

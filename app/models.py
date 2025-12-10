@@ -824,6 +824,28 @@ def count_available_drivers_for_date(tenant_id: int, check_date: date) -> int:
     
     return count
 
+def count_available_helpers_for_date(tenant_id: int, check_date: date) -> int:
+    """
+    Tel het aantal beschikbare helpers (bijchauffeurs) voor een specifieke datum.
+    Een helper is beschikbaar als:
+    - role = helper
+    - active = True
+    - Er een Availability record bestaat voor die datum met active = True
+    """
+    count = db.session.query(db.func.count(Employee.employee_id)).join(
+        Availability,
+        (Employee.tenant_id == Availability.tenant_id) & 
+        (Employee.employee_id == Availability.employee_id)
+    ).filter(
+        Employee.tenant_id == tenant_id,
+        Employee.role == EmployeeRole.helper,
+        Employee.active.is_(True),
+        Availability.available_date == check_date,
+        Availability.active.is_(True)
+    ).scalar() or 0
+    
+    return count
+
 
 def count_available_trucks(tenant_id: int) -> int:
     """
@@ -879,6 +901,7 @@ def get_capacity_info_for_date(tenant_id: int, check_date: date) -> dict:
     - Trucks: alleen checken als er trucks zijn, dan moeten actieve regio's ≤ trucks
     """
     available_drivers = count_available_drivers_for_date(tenant_id, check_date)
+    available_helpers = count_available_helpers_for_date(tenant_id, check_date)
     available_trucks = count_available_trucks(tenant_id)
     active_regions = count_active_regions_for_date(tenant_id, check_date)
     total_deliveries = count_total_deliveries_for_date(tenant_id, check_date)
@@ -910,6 +933,7 @@ def get_capacity_info_for_date(tenant_id: int, check_date: date) -> dict:
     
     return {
         "available_drivers": available_drivers,
+        "available_helpers": available_helpers,
         "available_trucks": available_trucks,
         "active_regions": active_regions,
         "total_deliveries": total_deliveries,
@@ -980,6 +1004,7 @@ def get_suggested_dates_for_address(tenant_id: int, lat: float, lng: float, days
                     "max_deliveries": region_max_deliveries,  # Voeg max leveringen toe aan response
                     # Extra capaciteitsinfo
                     "available_drivers": capacity_info["available_drivers"],
+                    "available_helpers": capacity_info["available_helpers"],
                     "available_trucks": capacity_info["available_trucks"],
                     "drivers_left": capacity_info["drivers_left"],
                     "trucks_left": capacity_info["trucks_left"]

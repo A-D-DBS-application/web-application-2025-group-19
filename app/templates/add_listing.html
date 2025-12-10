@@ -37,8 +37,12 @@
                 <!-- Legenda -->
                 <div class="flex flex-wrap gap-4 mb-4 text-xs">
                   <div class="flex items-center gap-2">
-                    <span style="width: 14px; height: 14px; border-radius: 4px; background: #10B981;"></span>
-                    <span>Beschikbaar (chauffeur + truck)</span>
+                    <span style="width: 14px; height: 14px; border-radius: 4px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3);"></span>
+                    <span>Beschikbaar (chauffeur)</span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <span style="width: 14px; height: 14px; border-radius: 4px; background: rgba(249, 115, 22, 0.15); border: 1px solid rgba(249, 115, 22, 0.3);"></span>
+                    <span>Beschikbaar (chauffeur + bijchauffeur)</span>
                   </div>
                   <div class="flex items-center gap-2">
                     <span style="font-size: 1rem;">⭐</span>
@@ -88,7 +92,7 @@
                 </div>
                 
                 <p id="calendar-hint" class="text-xs text-muted mt-4" style="text-align: center;">
-                  Klik op een groene dag om deze te selecteren als leveringsdatum. 
+                  Klik op een groene of oranje dag om deze te selecteren als leveringsdatum. 
                   <span id="address-hint" style="display: none;">Sterren ⭐ verschijnen bij dagen met bestaande leveringen in dezelfde regio.</span>
                 </p>
               </div>
@@ -101,6 +105,11 @@
           <div class="form-group">
             <label class="form-label">Product beschrijving</label>
             <input type="text" name="product_description" placeholder="Omschrijf product" class="form-input" required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Uur van de levering</label>
+            <input type="text" name="delivery_hour" placeholder="Bijv. 14:00 - 16:00 of 's ochtends" class="form-input">
           </div>
 
           <button type="submit" class="btn btn-primary mt-3">Levering Plannen</button>
@@ -508,22 +517,34 @@
     cursor: not-allowed;
   }
   
-  /* Premium Groen - Beschikbaar */
+  /* Premium Groen - Beschikbaar (chauffeur alleen) */
   .calendar-day.available {
-    background: rgba(16, 185, 129, 0.15);
-    color: #065F46;
+    background: rgba(34, 197, 94, 0.3);
+    color: #15803D;
     font-weight: 500;
   }
   
   .calendar-day.available:hover {
-    background: #10B981;
+    background: #22C55E;
+    color: white;
+  }
+  
+  /* Oranje - Beschikbaar met bijchauffeur */
+  .calendar-day.available-with-helper {
+    background: rgba(251, 146, 60, 0.3);
+    color: #C2410C;
+    font-weight: 500;
+  }
+  
+  .calendar-day.available-with-helper:hover {
+    background: #FB923C;
     color: white;
   }
   
   /* Premium Rood - Geblokkeerd */
   .calendar-day.blocked {
-    background: rgba(239, 68, 68, 0.12);
-    color: #991B1B;
+    background: rgba(248, 113, 113, 0.25);
+    color: #DC2626;
     cursor: not-allowed;
   }
   
@@ -710,6 +731,7 @@
             region_id: s.region_id,
             region_name: s.region_name,
             available_drivers: s.available_drivers,
+            available_helpers: s.available_helpers || 0,
             available_trucks: s.available_trucks,
             drivers_left: s.drivers_left,
             trucks_left: s.trucks_left,
@@ -732,15 +754,21 @@
   }
 
   function loadCalendarData() {
+    // Clear cache to ensure fresh data (in case chauffeurs were added on another page)
+    capacityCache = {};
+    calendarData = {};
+    
     // Load general availability data for all calendar days
     // This ensures all days show availability status (green for available driver + truck)
     renderCalendar();
     document.getElementById('calendar-hint').style.display = 'block';
     
     // Pre-check capacity for upcoming days to show availability
+    // After all checks complete, re-render to update the calendar with fresh data
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const daysToCheck = 60; // Check next 60 days (2 months)
+    const checkPromises = [];
     
     for (let i = 0; i < daysToCheck; i++) {
       const checkDate = new Date(today);
@@ -754,9 +782,27 @@
       
       // Check capacity asynchronously for days without region data
       if (!calendarData[dateStr].region_id) {
-        checkDayCapacity(dateStr);
+        checkPromises.push(
+          checkDayCapacity(dateStr).catch(err => {
+            console.error('Capacity check failed for', dateStr, err);
+            return null;
+          })
+        );
       }
     }
+    
+    // When all checks complete, re-render once to update the calendar
+    Promise.all(checkPromises).then(() => {
+      console.log('All capacity checks completed, re-rendering calendar');
+      setTimeout(() => {
+        renderCalendar();
+        console.log('Calendar re-rendered with fresh data');
+      }, 100); // Small delay to batch updates
+    }).catch(err => {
+      console.error('Error in capacity checks:', err);
+      // Still re-render even if some checks failed
+      setTimeout(() => renderCalendar(), 100);
+    });
   }
 
 
@@ -931,14 +977,15 @@
       dayCell.className = 'calendar-day';
       dayCell.textContent = day;
       
-      // Helper: is er minstens 1 chauffeur beschikbaar?
-      // STRENG: alleen true als er expliciet chauffeurs beschikbaar zijn
+      // Helper: is er minstens 1 chauffeur OF helper beschikbaar?
+      // Beschikbaar als er een chauffeur OF een helper beschikbaar is
       const hasDriversAvailable = (info) => {
-        if (!info) return false; // Geen info = geen chauffeurs beschikbaar
+        if (!info) return false; // Geen info = geen chauffeurs/helpers beschikbaar
         const totalDrivers = info.total_drivers_in_system || 0;
         const availableDrivers = info.available_drivers || 0;
-        // Alleen beschikbaar als er chauffeurs in het systeem zijn EN minstens 1 beschikbaar is
-        return totalDrivers > 0 && availableDrivers > 0;
+        const availableHelpers = info.available_helpers || 0;
+        // Beschikbaar als er chauffeurs beschikbaar zijn OF helpers beschikbaar zijn
+        return (totalDrivers > 0 && availableDrivers > 0) || availableHelpers > 0;
       };
       
       if (isPast) {
@@ -965,14 +1012,25 @@
           }
         }
         // 2) Algemene capaciteit (chauffeurs/trucks) indien geen regio-data
-        else if (capacityInfo !== undefined && capacityInfo !== null) {
+        // Check capacityCache first (most up-to-date), then calendarData
+        else if (capacityInfo !== undefined && capacityInfo !== null && !capacityInfo.error) {
           const driversOk = hasDriversAvailable(capacityInfo);
           // Gebruik default max leveringen (13) als er geen regio-specifieke data is
           const defaultMaxDeliveries = 13;
           const underLimit = (capacityInfo.total_deliveries || 0) < defaultMaxDeliveries;
+          const availableHelpers = capacityInfo.available_helpers || 0;
+          // Oranje: er is een helper beschikbaar (ongeacht of er een chauffeur is)
+          const hasHelper = availableHelpers > 0;
+          
           if (driversOk && underLimit) {
             isAvailable = true;
             onSelect = () => selectDate(dateStr, null, null, 0, defaultMaxDeliveries);
+            // Store helper info for later use
+            if (!dayData.available_helpers) {
+              dayData.available_helpers = availableHelpers;
+            }
+            // Store flag for orange color (helper available)
+            dayData.has_helper = hasHelper;
           } else {
             if (!driversOk) {
               blockedReason = 'Geen chauffeurs beschikbaar';
@@ -991,6 +1049,17 @@
             isAvailable = true;
             onSelect = () => selectDate(dateStr, null, null, 0, maxDeliveries);
           } else {
+            // If previously blocked, always re-check to see if drivers were added
+            // This allows the calendar to update when chauffeurs are added
+            if (!dayData.is_available && dayCell) {
+              // Re-check capacity to get latest data (chauffeurs might have been added)
+              // Don't mark as blocked yet - let the async check update it
+              // Set a loading state
+              dayCell.classList.add('blocked');
+              dayCell.title = 'Controleren beschikbaarheid...';
+              checkDayCapacity(dateStr, dayCell, true);
+              // Continue with normal rendering - the async check will update the styling
+            }
             blockedReason = dayData.reason || (!driversOk ? 'Geen chauffeurs beschikbaar' : 'Geen capaciteit');
           }
         }
@@ -999,14 +1068,38 @@
           // Standaard NIET beschikbaar totdat we weten dat er chauffeurs zijn
           isAvailable = false;
           blockedReason = 'Controleren beschikbaarheid...';
-          // Check asynchroon de capaciteit
-          checkDayCapacity(dateStr, dayCell);
+          // Check asynchroon de capaciteit (force refresh if already cached to get latest data)
+          const forceRefresh = capacityCache[dateStr] !== undefined;
+          checkDayCapacity(dateStr, dayCell, forceRefresh);
         }
         
         if (isAvailable) {
-          dayCell.classList.add('available');
+          // Check if there is a helper available for this date (orange)
+          const finalDayData = calendarData[dateStr] || {};
+          const finalCapacityInfo = capacityCache[dateStr];
+          const availableHelpers = (finalDayData.available_helpers || 0) || (finalCapacityInfo && finalCapacityInfo.available_helpers || 0);
+          // Oranje: er is een helper beschikbaar (ongeacht of er een chauffeur is)
+          const hasHelper = availableHelpers > 0;
+          // Fallback to stored flag if available
+          const shouldBeOrange = finalDayData.has_helper !== undefined 
+            ? finalDayData.has_helper 
+            : hasHelper;
+          
+          // Remove any existing classes first
+          dayCell.classList.remove('blocked', 'available', 'available-with-helper');
+          
+          if (shouldBeOrange) {
+            // Oranje: helper beschikbaar
+            dayCell.classList.add('available-with-helper');
+          } else {
+            // Groen: alleen chauffeur beschikbaar (geen helper)
+            dayCell.classList.add('available');
+          }
+          dayCell.title = '';
           if (onSelect) dayCell.onclick = onSelect;
         } else {
+          // Remove any existing classes first
+          dayCell.classList.remove('available', 'available-with-helper');
           dayCell.classList.add('blocked');
           if (blockedReason) {
             dayCell.title = blockedReason;
@@ -1038,25 +1131,40 @@
   }
 
   // Async check capaciteit voor een specifieke dag
-  function checkDayCapacity(dateStr, dayCell = null) {
-    // Voorkom duplicate requests
-    if (capacityCache[dateStr] !== undefined) return;
+  function checkDayCapacity(dateStr, dayCell = null, forceRefresh = false) {
+    // Voorkom duplicate requests (unless forcing refresh)
+    if (!forceRefresh && capacityCache[dateStr] !== undefined) {
+      // Return a resolved promise if already cached
+      return Promise.resolve(capacityCache[dateStr]);
+    }
     capacityCache[dateStr] = null; // Mark as loading
     
-    fetch(`/api/check-daily-capacity?date=${dateStr}`)
+    return fetch(`/api/check-daily-capacity?date=${dateStr}`)
       .then(response => response.json())
       .then(data => {
+        console.log(`Capacity check for ${dateStr}:`, {
+          available_drivers: data.available_drivers,
+          available_helpers: data.available_helpers,
+          total_drivers_in_system: data.total_drivers_in_system,
+          total_deliveries: data.total_deliveries
+        });
         capacityCache[dateStr] = data;
         
         // Store in calendarData for later use
         if (!calendarData[dateStr]) {
           calendarData[dateStr] = {};
         }
-        // STRENG: alleen beschikbaar als er expliciet chauffeurs beschikbaar zijn
+        // Beschikbaar als er een chauffeur OF een helper beschikbaar is
+        // Groen: alleen chauffeur (geen helper)
+        // Oranje: helper beschikbaar (ongeacht of er een chauffeur is)
         const totalDrivers = data.total_drivers_in_system || 0;
         const availableDrivers = data.available_drivers || 0;
-        const driversOk = totalDrivers > 0 && availableDrivers > 0;
+        const availableHelpers = data.available_helpers || 0;
+        // Beschikbaar als er chauffeurs beschikbaar zijn OF helpers beschikbaar zijn
+        const driversOk = (totalDrivers > 0 && availableDrivers > 0) || availableHelpers > 0;
         const underLimit = (data.total_deliveries || 0) < 13;
+        // Oranje: er is een helper beschikbaar (ongeacht of er een chauffeur is)
+        const hasHelper = availableHelpers > 0;
         
         // Gebruik default max leveringen (13) als er geen regio-specifieke data is
         const defaultMaxDeliveries = 13;
@@ -1066,6 +1174,7 @@
           is_available: driversOk && underLimit,
           max_deliveries: defaultMaxDeliveries, // Store max leveringen
           available_drivers: data.available_drivers,
+          available_helpers: availableHelpers,
           total_drivers_in_system: data.total_drivers_in_system,
           available_trucks: data.available_trucks,
           total_deliveries: data.total_deliveries,
@@ -1075,9 +1184,17 @@
         // Update the cell styling if dayCell is provided (during render)
         if (dayCell) {
           if (driversOk && underLimit) {
-            // Maak beschikbaar (groen)
+            // Maak beschikbaar - groen als alleen chauffeur (geen helper), oranje als er een helper is
             dayCell.classList.remove('blocked');
-            dayCell.classList.add('available');
+            if (hasHelper) {
+              // Oranje: helper beschikbaar (ongeacht of er een chauffeur is)
+              dayCell.classList.remove('available');
+              dayCell.classList.add('available-with-helper');
+            } else {
+              // Groen: alleen chauffeur beschikbaar (geen helper)
+              dayCell.classList.remove('available-with-helper');
+              dayCell.classList.add('available');
+            }
             dayCell.title = '';
             const defaultMaxDeliveries = 13;
             const onSelect = () => selectDate(dateStr, null, null, 0, defaultMaxDeliveries);
@@ -1107,9 +1224,12 @@
             dayCell.parentNode.replaceChild(newCell, dayCell);
           }
         } else {
-          // If no dayCell, trigger a re-render to update the calendar
-          renderCalendar();
+          // If no dayCell, the calendar will be re-rendered by loadCalendarData
+          // after all checks complete, so we don't need to render here
         }
+        
+        // Return data for promise chaining
+        return data;
       })
       .catch(error => {
         console.error('Capacity check failed for', dateStr, error);
