@@ -153,6 +153,8 @@ class Employee(db.Model):
     role        = db.Column(db.Enum(EmployeeRole, name="employee_role", native_enum=True),
                             nullable=False, default=EmployeeRole.seller)
     active      = db.Column(db.Boolean, default=True)
+    has_co_driver = db.Column(db.Boolean, default=False, nullable=False)  # Heeft deze chauffeur een bijchauffeur?
+    co_driver_id = db.Column(db.Integer, nullable=True)  # ID van de bijchauffeur (optioneel)
     __table_args__ = (
         ForeignKeyConstraint(["tenant_id"], ["tenant.tenant_id"], ondelete="CASCADE"),
         ForeignKeyConstraint(["tenant_id", "location_id"],
@@ -161,6 +163,9 @@ class Employee(db.Model):
         UniqueConstraint("tenant_id", "employee_id", name="uq_employee_tenant_id"),
         UniqueConstraint("tenant_id", "email", name="uq_employee_tenant_email"),
         Index("idx_employee_tenant_location", "tenant_id", "location_id"),
+        ForeignKeyConstraint(["tenant_id", "co_driver_id"],
+                             ["employee.tenant_id", "employee.employee_id"],
+                             ondelete="SET NULL", name="fk_employee_co_driver"),
     )
 
     @property
@@ -823,6 +828,26 @@ def count_available_drivers_for_date(tenant_id: int, check_date: date) -> int:
     
     return count
 
+def count_drivers_with_co_driver_for_date(tenant_id: int, check_date: date) -> int:
+    """
+    Tel het aantal beschikbare chauffeurs met bijchauffeur op een specifieke datum.
+    """
+    count = db.session.query(db.func.count(Employee.employee_id)).join(
+        Availability,
+        (Employee.tenant_id == Availability.tenant_id) &
+        (Employee.employee_id == Availability.employee_id)
+    ).filter(
+        Employee.tenant_id == tenant_id,
+        Employee.role == EmployeeRole.driver,
+        Employee.active.is_(True),
+        Employee.has_co_driver.is_(True),
+        Employee.co_driver_id.isnot(None),
+        Availability.available_date == check_date,
+        Availability.active.is_(True)
+    ).scalar() or 0
+
+    return count
+
 
 def count_available_trucks(tenant_id: int) -> int:
     """
@@ -878,6 +903,7 @@ def get_capacity_info_for_date(tenant_id: int, check_date: date) -> dict:
     - Trucks: alleen checken als er trucks zijn, dan moeten actieve regio's ≤ trucks
     """
     available_drivers = count_available_drivers_for_date(tenant_id, check_date)
+    drivers_with_co_driver = count_drivers_with_co_driver_for_date(tenant_id, check_date)
     available_trucks = count_available_trucks(tenant_id)
     active_regions = count_active_regions_for_date(tenant_id, check_date)
     total_deliveries = count_total_deliveries_for_date(tenant_id, check_date)
@@ -909,6 +935,7 @@ def get_capacity_info_for_date(tenant_id: int, check_date: date) -> dict:
     
     return {
         "available_drivers": available_drivers,
+        "drivers_with_co_driver": drivers_with_co_driver,  # Aantal chauffeurs met bijchauffeur
         "available_trucks": available_trucks,
         "active_regions": active_regions,
         "total_deliveries": total_deliveries,
@@ -979,6 +1006,7 @@ def get_suggested_dates_for_address(tenant_id: int, lat: float, lng: float, days
                     "max_deliveries": region_max_deliveries,  # Voeg max leveringen toe aan response
                     # Extra capaciteitsinfo
                     "available_drivers": capacity_info["available_drivers"],
+                    "drivers_with_co_driver": capacity_info.get("drivers_with_co_driver", 0),  # Aantal chauffeurs met bijchauffeur
                     "available_trucks": capacity_info["available_trucks"],
                     "drivers_left": capacity_info["drivers_left"],
                     "trucks_left": capacity_info["trucks_left"]

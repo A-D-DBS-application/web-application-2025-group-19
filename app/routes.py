@@ -520,10 +520,24 @@ def add_driver():
     last = request.form.get("last_name", "").strip()
     email = request.form.get("email", "").strip().lower()
     availability_dates_str = request.form.get("availability_dates", "").strip()
+    has_co_driver = request.form.get("has_co_driver") == "yes"
+    co_driver_id_str = request.form.get("co_driver_id", "").strip()
 
     if not first or not last or not email:
         flash("Vul voornaam, achternaam en e-mail in.", "error")
         return redirect(url_for("main.drivers_list"))
+    
+    # Validate co-driver selection
+    co_driver_id = None
+    if has_co_driver:
+        if not co_driver_id_str:
+            flash("Selecteer een bijchauffeur wanneer 'Heeft bijchauffeur?' op 'Ja' staat.", "error")
+            return redirect(url_for("main.drivers_list"))
+        try:
+            co_driver_id = int(co_driver_id_str)
+        except ValueError:
+            flash("Ongeldige bijchauffeur geselecteerd.", "error")
+            return redirect(url_for("main.drivers_list"))
 
     tid = tenant_id()
     current_employee_id = session.get("employee_id")
@@ -546,6 +560,9 @@ def add_driver():
                 emp.last_name = last
             # Update role to driver so they can be used as a driver
             emp.role = EmployeeRole.driver
+            # Update co-driver info
+            emp.has_co_driver = has_co_driver
+            emp.co_driver_id = co_driver_id if has_co_driver else None
         else:
             # Different person with same email: prevent duplicate
             flash("E-mailadres bestaat al voor een andere medewerker.", "error")
@@ -557,7 +574,7 @@ def add_driver():
         if db_uri.startswith("sqlite:"):
             emp = Employee(
                 tenant_id=tid, employee_id=next_emp_id, first_name=first, last_name=last, email=email,
-                role=EmployeeRole.driver, active=True
+                role=EmployeeRole.driver, active=True, has_co_driver=has_co_driver, co_driver_id=co_driver_id
             )
             db.session.add(emp)
             db.session.flush()  # Get the id before commit
@@ -565,8 +582,8 @@ def add_driver():
         else:
             # Postgres: insert with OVERRIDING SYSTEM VALUE
             sql = text("""
-            INSERT INTO employee (tenant_id, employee_id, location_id, first_name, last_name, email, role, active)
-            VALUES (:tenant_id, :employee_id, :location_id, :first_name, :last_name, :email, :role, :active)
+            INSERT INTO employee (tenant_id, employee_id, location_id, first_name, last_name, email, role, active, has_co_driver, co_driver_id)
+            VALUES (:tenant_id, :employee_id, :location_id, :first_name, :last_name, :email, :role, :active, :has_co_driver, :co_driver_id)
             OVERRIDING SYSTEM VALUE
             RETURNING id, employee_id
             """)
@@ -579,6 +596,8 @@ def add_driver():
                 "email": email,
                 "role": EmployeeRole.driver.value if hasattr(EmployeeRole, 'driver') else 'driver',
                 "active": True,
+                "has_co_driver": has_co_driver,
+                "co_driver_id": co_driver_id,
             }
             res = db.session.execute(sql, params)
             row = res.fetchone()
@@ -1313,19 +1332,37 @@ def drivers_list():
             # Get the first future availability date for display
             first_available_date = available_dates[0] if available_dates else None
             
+            # Get co-driver info if available
+            co_driver_name = None
+            if driver.has_co_driver and driver.co_driver_id:
+                co_driver = Employee.query.filter_by(
+                    tenant_id=tid, employee_id=driver.co_driver_id
+                ).first()
+                if co_driver:
+                    co_driver_name = f"{co_driver.first_name} {co_driver.last_name}"
+            
             driver_list.append({
                 "employee_id": driver.employee_id,
                 "name": f"{driver.first_name} {driver.last_name}",
                 "email": driver.email,
                 "available_date": first_available_date,
                 "available_dates": available_dates,
-                "available_today": available_today
+                "available_today": available_today,
+                "has_co_driver": driver.has_co_driver or False,
+                "co_driver_name": co_driver_name
             })
     except Exception as e:
         current_app.logger.exception(f"Error fetching drivers: {e}")
         driver_list = []
     
-    return render_template("drivers.html", drivers=driver_list)
+    # Get all drivers for co-driver dropdown (exclude current driver being edited if applicable)
+    all_drivers_for_dropdown = db.session.query(Employee).filter(
+        Employee.tenant_id == tid,
+        Employee.role == EmployeeRole.driver,
+        Employee.active.is_(True)
+    ).order_by(Employee.last_name.asc()).all()
+    
+    return render_template("drivers.html", drivers=driver_list, all_drivers=all_drivers_for_dropdown)
 
 
 @main.route("/driver/<int:employee_id>/delete", methods=["POST"])
