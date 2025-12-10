@@ -698,7 +698,6 @@
     document.getElementById('no-suggestions').classList.add('hidden');
   }
 
-<<<<<<< HEAD
   // Helper function to extract municipality from address
   function extractMunicipalityFromAddress(address) {
     if (!address) return '—';
@@ -756,7 +755,6 @@
       
       detailsDiv.innerHTML = `
         <div class="grid grid-cols-2 gap-3">
-          <div><p class="text-xs text-muted">Gemeente</p><p class="font-medium">${municipality}</p></div>
           <div><p class="text-xs text-muted">Datum</p><p class="font-medium">${formatDate(dateStr)}</p></div>
           <div><p class="text-xs text-muted">Leveringen</p><p class="font-medium">0 van ${maxDeliveriesForRegion}</p></div>
           <div><p class="text-xs text-muted">Status</p><p class="font-medium badge badge-success" style="display: inline-block;">Beschikbaar</p></div>

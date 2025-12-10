@@ -637,13 +637,105 @@ textarea.form-input {
 .grid-cols-2 { grid-template-columns: repeat(2, 1fr); }
 .grid-cols-3 { grid-template-columns: repeat(3, 1fr); }
 
+/* Mobile menu toggle - hidden by default (desktop) */
+.navbar-toggle {
+  display: none;
+}
+
+/* Desktop: show navbar nav normally */
+.navbar-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  justify-self: start;
+}
+
 @media (max-width: 768px) {
   .grid-cols-2,
   .grid-cols-3 {
     grid-template-columns: 1fr;
   }
   
+  /* Mobile: show toggle button */
+  .navbar-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    color: var(--color-black);
+    transition: color var(--transition-fast);
+  }
+  
+  .navbar.scrolled .navbar-toggle {
+    color: var(--color-white);
+  }
+  
+  .navbar-toggle:hover {
+    color: var(--color-sky-accent);
+  }
+  
+  .navbar-toggle-icon {
+    width: 24px;
+    height: 24px;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  
+  /* Mobile: hide navbar nav by default, show on toggle */
   .navbar-nav {
+    position: fixed;
+    top: 70px;
+    left: 0;
+    right: 0;
+    background: var(--color-white);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    flex-direction: column;
+    align-items: stretch;
+    padding: var(--spacing-sm) 0;
+    box-shadow: var(--shadow-lg);
+    transform: translateY(-100%);
+    opacity: 0;
+    visibility: hidden;
+    transition: all var(--transition-normal);
+    z-index: 999;
+    max-height: calc(100vh - 70px);
+    overflow-y: auto;
+  }
+  
+  .navbar-nav.active {
+    transform: translateY(0);
+    opacity: 1;
+    visibility: visible;
+  }
+  
+  .navbar.scrolled .navbar-nav {
+    background: var(--color-navy);
+  }
+  
+  .nav-link {
+    display: block;
+    padding: var(--spacing-md) var(--spacing-lg);
+    width: 100%;
+    border-radius: 0;
+    text-align: left;
+  }
+  
+  .navbar.scrolled .nav-link {
+    color: rgba(255, 255, 255, 0.9);
+  }
+  
+  .navbar-brand span {
+    display: none;
+  }
+  
+  .user-name {
     display: none;
   }
 }

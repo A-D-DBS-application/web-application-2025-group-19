@@ -5,7 +5,7 @@ from typing import List, Tuple, Dict
 import requests
 from flask import current_app
 
-from ..models import db, Region, Delivery, RegionAddress
+from ..models import db, GeoRegion, GeoDelivery
 
 MAX_DELIVERIES_PER_DAY = 13
 DEFAULT_SAME_DAY_RADIUS_KM = 15.0
@@ -29,11 +29,11 @@ def haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
 def geocode_address_with_mapbox(address: str) -> Tuple[float, float]:
     """
     Geocode een adres via Mapbox en retourneer (lat, lng).
-    Verwacht dat MAPBOX_ACCESS_TOKEN in de Flask-config staat.
+    Verwacht dat MAPBOX_TOKEN in de Flask-config staat.
     """
-    token = current_app.config.get("MAPBOX_ACCESS_TOKEN")
+    token = current_app.config.get("MAPBOX_TOKEN")
     if not token:
-        raise ValueError("MAPBOX_ACCESS_TOKEN is niet geconfigureerd.")
+        raise ValueError("MAPBOX_TOKEN is niet geconfigureerd.")
 
     url = f"https://api.mapbox.com/geocoding/v5/mapbox.places/{address}.json"
     params = {"access_token": token, "limit": 1}
@@ -53,28 +53,20 @@ def geocode_address_with_mapbox(address: str) -> Tuple[float, float]:
     return float(lat), float(lng)
 
 
-def detect_region_for_coordinates(lat: float, lng: float, tenant_id: int = None) -> Region:
+def detect_region_for_coordinates(lat: float, lng: float) -> GeoRegion:
     """
-    Zoek de beste Region voor gegeven coördinaten.
+    Zoek de beste GeoRegion voor gegeven coördinaten.
     Gooit ValueError indien geen regio binnen zijn straal valt.
-    
-    Note: Deze functie vereist tenant_id voor multi-tenant support.
     """
-    query = Region.query
-    if tenant_id:
-        query = query.filter_by(tenant_id=tenant_id)
-    
-    regions: List[Region] = query.all()
+    regions: List[GeoRegion] = GeoRegion.query.all()
     best_region = None
     best_distance = float("inf")
 
     for region in regions:
-        if region.center_lat and region.center_lng:
-            distance = haversine_km(lat, lng, region.center_lat, region.center_lng)
-            radius = region.radius_km or 30.0
-            if distance <= radius and distance < best_distance:
-                best_region = region
-                best_distance = distance
+        distance = haversine_km(lat, lng, region.center_lat, region.center_lng)
+        if distance <= region.radius_km and distance < best_distance:
+            best_region = region
+            best_distance = distance
 
     if best_region is None:
         raise ValueError("Adres ligt buiten de leveringsregio's.")
@@ -83,8 +75,8 @@ def detect_region_for_coordinates(lat: float, lng: float, tenant_id: int = None)
 
 
 def get_suggested_dates_for_new_delivery(
-    address: str, same_day_radius_km: float, tenant_id: int = None
-) -> Tuple[Region, float, float, List[Dict]]:
+    address: str, same_day_radius_km: float
+) -> Tuple[GeoRegion, float, float, List[Dict]]:
     """
     Simpele implementatie:
     - Geocode adres
@@ -92,11 +84,9 @@ def get_suggested_dates_for_new_delivery(
     - Voor de komende 14 dagen: tel leveringen in deze regio
       * total = alle leveringen op die datum in de regio
       * nearby = leveringen op die datum binnen same_day_radius_km van het adres
-    
-    Note: Deze functie gebruikt RegionAddress om leveringen per datum te vinden.
     """
     lat, lng = geocode_address_with_mapbox(address)
-    region = detect_region_for_coordinates(lat, lng, tenant_id)
+    region = detect_region_for_coordinates(lat, lng)
 
     today = date.today()
     horizon = today + timedelta(days=14)
@@ -104,20 +94,18 @@ def get_suggested_dates_for_new_delivery(
     suggestions: List[Dict] = []
     current = today
     while current <= horizon:
-        # Gebruik RegionAddress om leveringen per datum te vinden
-        query = RegionAddress.query.filter(
-            RegionAddress.scheduled_date == current,
-            RegionAddress.region_id == region.region_id,
+        day_deliveries: List[GeoDelivery] = (
+            GeoDelivery.query.filter(
+                GeoDelivery.date == current,
+                GeoDelivery.region_id == region.id,
+            )
+            .all()
         )
-        if tenant_id:
-            query = query.filter_by(tenant_id=tenant_id)
-        
-        day_addresses: List[RegionAddress] = query.all()
 
-        total = len(day_addresses)
+        total = len(day_deliveries)
         nearby = 0
-        for addr in day_addresses:
-            dist = haversine_km(lat, lng, addr.latitude, addr.longitude)
+        for d in day_deliveries:
+            dist = haversine_km(lat, lng, d.lat, d.lng)
             if dist <= same_day_radius_km:
                 nearby += 1
 
