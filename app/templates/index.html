@@ -11,14 +11,14 @@
 <div class="grid grid-cols-3 gap-4 mb-5">
   <a href="{{ url_for('main.listings') }}" class="stat-card">
     <div class="stat-card-label">Geplande Leveringen</div>
-    <div class="stat-card-value">{{ deliveries_this_week }}</div>
-    <div class="stat-card-meta">Deze week</div>
+    <div class="stat-card-value">{{ deliveries_total }}</div>
+    <div class="stat-card-meta">Vandaag: {{ deliveries_today }}</div>
   </a>
   
   <a href="{{ url_for('main.drivers_list') }}" class="stat-card">
     <div class="stat-card-label">Beschikbare Chauffeurs</div>
-    <div class="stat-card-value">{{ available_drivers }}</div>
-    <div class="stat-card-meta">Actief vandaag</div>
+    <div class="stat-card-value">{{ drivers_total }}</div>
+    <div class="stat-card-meta">Actief vandaag: {{ available_drivers }}</div>
   </a>
   
   <a href="{{ url_for('main.trucks_list') }}" class="stat-card">

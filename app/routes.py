@@ -7,7 +7,7 @@ from decimal import Decimal
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash, current_app, jsonify
 from .models import (
     db, Tenant, Region, Location, Employee, Availability, Customer, Product,
-    CustomerOrder, OrderItem, DeliveryRun, Delivery, RegionAddress, Truck, TruckType,
+    CustomerOrder, OrderItem, DeliveryRun, Delivery, DeliveryStatus, RegionAddress, Truck, TruckType,
     EmployeeRole, RunStatus, set_employee_availability, get_available_drivers, add_order,
     upsert_run_and_attach_delivery_with_capacity, get_delivery_overview, suggest_delivery_days,
     find_matching_regions, get_suggested_dates_for_address, add_address_to_region,
@@ -70,36 +70,44 @@ def index():
     next_week_end = today + timedelta(days=14)
     
     try:
-        # Normalize employee id to use for availability operations
-        if existing_emp:
-            employee_id_val = existing_emp.employee_id
-        else:
-            # either ORM-created `emp` or raw-insert created_employee_id
-            if 'emp' in locals():
-                employee_id_val = emp.employee_id
-            else:
-                employee_id_val = created_employee_id
-        # 1. Geplande leveringen deze week
-        deliveries_this_week = db.session.query(db.func.count(Delivery.delivery_id)).filter(
+        # 1. Geplande leveringen: totaal en vandaag
+        deliveries_total = db.session.query(db.func.count(Delivery.delivery_id)).filter(
             Delivery.tenant_id == tid,
-            Delivery.delivery_status == 'scheduled'
+            Delivery.delivery_status == DeliveryStatus.scheduled
         ).scalar() or 0
 
-        # 2. Beschikbare chauffeurs vandaag (count active drivers with availability today)
-        available_drivers = db.session.query(db.func.count(Employee.employee_id)).outerjoin(
+        deliveries_today = db.session.query(db.func.count(Delivery.delivery_id)).join(
+            DeliveryRun,
+            (Delivery.tenant_id == DeliveryRun.tenant_id) & (Delivery.run_id == DeliveryRun.run_id)
+        ).filter(
+            Delivery.tenant_id == tid,
+            Delivery.delivery_status == DeliveryStatus.scheduled,
+            DeliveryRun.scheduled_date == today
+        ).scalar() or 0
+
+        # 2. Chauffeurs: totaal actief en actief vandaag
+        drivers_total = db.session.query(db.func.count(Employee.employee_id)).filter(
+            Employee.tenant_id == tid,
+            Employee.role == EmployeeRole.driver,
+            Employee.active.is_(True)
+        ).scalar() or 0
+
+        available_drivers = db.session.query(db.func.count(Employee.employee_id)).join(
             Availability,
-            (Employee.employee_id == Availability.employee_id) & (Availability.available_date == today)
+            (Employee.employee_id == Availability.employee_id) &
+            (Employee.tenant_id == Availability.tenant_id)
         ).filter(
             Employee.tenant_id == tid,
             Employee.role == EmployeeRole.driver,
             Employee.active.is_(True),
-            Availability.active.is_(True)
+            Availability.active.is_(True),
+            Availability.available_date == today
         ).scalar() or 0
 
-        # 3. Beschikbare trucks (count planned delivery runs)
-        available_trucks = db.session.query(db.func.count(DeliveryRun.run_id)).filter(
-            DeliveryRun.tenant_id == tid,
-            DeliveryRun.status == RunStatus.planned
+        # 3. Trucks: totaal actief in wagenpark
+        available_trucks = db.session.query(db.func.count(Truck.truck_id)).filter(
+            Truck.tenant_id == tid,
+            Truck.active.is_(True)
         ).scalar() or 0
 
     except Exception as e:
@@ -107,7 +115,9 @@ def index():
         current_app.logger.error(f"Dashboard stats query failed: {e}")
         import traceback
         current_app.logger.error(traceback.format_exc())
-        deliveries_this_week = 0
+        deliveries_total = 0
+        deliveries_today = 0
+        drivers_total = 0
         available_drivers = 0
         available_trucks = 0
 
@@ -236,7 +246,9 @@ def index():
         "index.html",
         username=username,
         listings=listings,
-        deliveries_this_week=deliveries_this_week,
+        deliveries_total=deliveries_total,
+        deliveries_today=deliveries_today,
+        drivers_total=drivers_total,
         available_drivers=available_drivers,
         available_trucks=available_trucks,
         drivers_list=drivers_list,
