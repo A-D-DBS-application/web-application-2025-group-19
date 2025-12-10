@@ -21,6 +21,7 @@
           <input type="hidden" name="lng" id="lng-input" value="">
           <input type="hidden" name="selected_region_id" id="selected-region-id" value="">
           <input type="hidden" name="region_id" id="region-input" value="">
+          <input type="hidden" name="municipality" id="municipality-input" value="">
 
           <div class="form-group">
             <label class="form-label">Adres</label>
@@ -441,13 +442,9 @@
     background: rgba(16, 185, 129, 0.15);
     color: #065F46;
     font-weight: 500;
-    -webkit-tap-highlight-color: rgba(16, 185, 129, 0.3);
-    touch-action: manipulation; /* Better touch response */
-    user-select: none; /* Prevent text selection on mobile */
   }
   
-  .calendar-day.available:hover,
-  .calendar-day.available:active {
+  .calendar-day.available:hover {
     background: #10B981;
     color: white;
   }
@@ -700,25 +697,6 @@
     document.getElementById('no-suggestions').classList.add('hidden');
   }
 
-  // Helper function to extract municipality from address
-  function extractMunicipalityFromAddress(address) {
-    if (!address) return '—';
-    
-    // Try to extract municipality from address (e.g., "Kerkstraat 10, 1000 Brussel, België" -> "Brussel")
-    const addressParts = address.split(',');
-    if (addressParts.length >= 2) {
-      const postalPart = addressParts[1].trim();
-      const postalWords = postalPart.split(' ');
-      if (postalWords.length >= 2) {
-        // Skip postal code, get municipality (rest of the words)
-        return postalWords.slice(1).join(' ') || '—';
-      } else if (postalWords.length === 1) {
-        return postalWords[0] || '—';
-      }
-    }
-    return '—';
-  }
-
   function selectDate(dateStr, regionId, regionName, deliveryCount) {
     document.getElementById('scheduled-date').value = dateStr;
     selectedCalendarDate = dateStr;
@@ -727,20 +705,20 @@
     const infoDiv = document.getElementById('region-info');
     const detailsDiv = document.getElementById('region-details');
     
-    // Extract municipality from address
-    const addressInput = document.getElementById('delivery-address');
-    const municipality = addressInput && addressInput.value ? extractMunicipalityFromAddress(addressInput.value) : '—';
-    
     if (regionId) {
       document.getElementById('selected-region-id').value = regionId;
       document.getElementById('region-input').value = regionName || '';
       
       detailsDiv.innerHTML = `
         <div class="grid grid-cols-2 gap-3">
-          <div><p class="text-xs text-muted">Gemeente</p><p class="font-medium">${municipality}</p></div>
+          <div><p class="text-xs text-muted">Regio</p><p class="font-medium">${regionName}</p></div>
           <div><p class="text-xs text-muted">Leveringen</p><p class="font-medium">${deliveryCount || 0} van 13</p></div>
           <div><p class="text-xs text-muted">Datum</p><p class="font-medium">${formatDate(dateStr)}</p></div>
           <div><p class="text-xs text-muted">Status</p><p class="font-medium badge badge-success" style="display: inline-block;">Beschikbaar</p></div>
+        </div>
+        <div class="form-group mt-4">
+          <label class="form-label">Gemeente</label>
+          <input type="text" name="municipality" id="municipality-input-field" placeholder="Voer gemeente in" class="form-input" value="">
         </div>
       `;
     } else {
@@ -749,15 +727,28 @@
       
       detailsDiv.innerHTML = `
         <div class="grid grid-cols-2 gap-3">
-          <div><p class="text-xs text-muted">Gemeente</p><p class="font-medium">${municipality}</p></div>
           <div><p class="text-xs text-muted">Datum</p><p class="font-medium">${formatDate(dateStr)}</p></div>
-          <div><p class="text-xs text-muted">Leveringen</p><p class="font-medium">0 van 13</p></div>
           <div><p class="text-xs text-muted">Status</p><p class="font-medium badge badge-success" style="display: inline-block;">Beschikbaar</p></div>
+        </div>
+        <div class="form-group mt-4">
+          <label class="form-label">Gemeente</label>
+          <input type="text" name="municipality" id="municipality-input-field" placeholder="Voer gemeente in" class="form-input" value="">
         </div>
       `;
     }
     
     infoDiv.classList.remove('hidden');
+    
+    // Update hidden field when municipality input changes
+    setTimeout(() => {
+      const municipalityInput = document.getElementById('municipality-input-field');
+      if (municipalityInput) {
+        municipalityInput.addEventListener('input', function() {
+          document.getElementById('municipality-input').value = this.value;
+        });
+      }
+    }, 100);
+    
     renderCalendar();
   }
 
@@ -907,23 +898,13 @@
         
         if (isAvailable) {
           dayCell.classList.add('available');
-          if (onSelect) {
-            // Support both click and touch events for mobile
-            dayCell.onclick = onSelect;
-            dayCell.addEventListener('touchend', function(e) {
-              e.preventDefault();
-              e.stopPropagation();
-              onSelect();
-            }, { passive: false });
-          }
+          if (onSelect) dayCell.onclick = onSelect;
         } else {
           dayCell.classList.add('blocked');
           if (blockedReason) {
             dayCell.title = blockedReason;
           }
           dayCell.onclick = null;
-          // Remove any existing touch listeners
-          dayCell.replaceWith(dayCell.cloneNode(true));
         }
       }
       
@@ -990,10 +971,6 @@
               dayCell.title = data.reason || 'Geen capaciteit (chauffeurs/trucks)';
             }
             dayCell.onclick = null;
-            // Remove any existing touch listeners by cloning
-            const newCell = dayCell.cloneNode(true);
-            dayCell.parentNode.replaceChild(newCell, dayCell);
-            dayCell = newCell;
           }
         } else {
           // If no dayCell, trigger a re-render to update the calendar
