@@ -511,6 +511,34 @@ textarea.form-input {
   text-align: right;
 }
 
+/* Consistent delete row styling */
+.table-mobile-row.delete-row {
+  border-bottom: none;
+  padding-top: var(--spacing-md);
+  justify-content: center;
+}
+
+.table-mobile-row.delete-row form {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.mobile-delete-btn {
+  width: auto;
+  max-width: 220px;
+  display: inline-flex;
+  justify-content: center;
+  margin: 0 auto;
+  padding-left: var(--spacing-lg);
+  padding-right: var(--spacing-lg);
+}
+
+/* Hide desktop 'Acties' header text (keep column width) */
+.actions-col {
+  width: 110px;
+}
+
 @media (max-width: 768px) {
   .table th,
   .table td {

@@ -69,9 +69,6 @@
         </svg>
         Overzicht Wagenpark
       </h2>
-      {% if trucks %}
-        <p class="text-small text-muted mt-1">{{ trucks | length }} voertuig{% if trucks | length != 1 %}en{% endif %} geregistreerd</p>
-      {% endif %}
     </div>
   </div>
 
@@ -84,7 +81,7 @@
           <th>Nummerplaat</th>
           <th>Capaciteit</th>
           <th>Aankoopdatum</th>
-          <th class="text-center">Acties</th>
+          <th class="text-center actions-col"></th>
         </tr>
       </thead>
       <tbody>
@@ -164,9 +161,9 @@
               {% endif %}
             </div>
           </div>
-          <div class="table-mobile-row" style="border-bottom: none; padding-top: var(--spacing-md);">
+          <div class="table-mobile-row delete-row">
             <form method="POST" action="{{ url_for('main.delete_truck', truck_id=truck.truck_id) }}" onsubmit="return confirm('Weet je zeker dat je dit voertuig wilt verwijderen?');">
-              <button type="submit" class="btn btn-danger btn-block">Verwijderen</button>
+              <button type="submit" class="btn btn-danger mobile-delete-btn">Verwijderen</button>
             </form>
           </div>
         </div>
@@ -185,4 +182,19 @@
     </div>
   {% endif %}
 </div>
+
+<script>
+  // Force mobile card view on small screens (match chauffeurs/leveringen gedrag)
+  if (window.innerWidth <= 768) {
+    const tableContainers = document.querySelectorAll('.table-container');
+    tableContainers.forEach(container => {
+      const table = container.querySelector('.table');
+      const mobileView = container.querySelector('.table-mobile-view');
+      if (table && mobileView) {
+        table.style.display = 'none';
+        mobileView.style.display = 'block';
+      }
+    });
+  }
+</script>
 {% endblock %}

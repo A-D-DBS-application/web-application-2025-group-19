@@ -35,7 +35,7 @@
           <th>Product Omschrijving</th>
           <th>Status</th>
           <th>Geplande Datum</th>
-          <th class="text-center">Acties</th>
+          <th class="text-center actions-col"></th>
         </tr>
       </thead>
       <tbody>
@@ -92,9 +92,9 @@
               {% endif %}
             </div>
           </div>
-          <div class="table-mobile-row" style="border-bottom: none; padding-top: var(--spacing-md);">
+          <div class="table-mobile-row delete-row">
             <form method="POST" action="{{ url_for('main.delete_delivery', delivery_id=listing.delivery_id) }}" onsubmit="return confirm('Weet je zeker dat je deze levering wilt verwijderen?');">
-              <button type="submit" class="btn btn-danger btn-block">Verwijderen</button>
+              <button type="submit" class="btn btn-danger mobile-delete-btn">Verwijderen</button>
             </form>
           </div>
         </div>

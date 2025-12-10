@@ -100,9 +100,6 @@
         </svg>
         Overzicht Chauffeurs
       </h2>
-      {% if drivers %}
-        <p class="text-small text-muted mt-1">{{ drivers | length }} chauffeur{% if drivers | length != 1 %}s{% endif %} actief</p>
-      {% endif %}
     </div>
   </div>
 
@@ -113,7 +110,7 @@
           <th>Naam</th>
           <th>E-mailadres</th>
           <th>Beschikbaarheid</th>
-          <th class="text-center">Acties</th>
+          <th class="text-center actions-col"></th>
         </tr>
       </thead>
       <tbody>
@@ -189,9 +186,9 @@
               {% endif %}
             </div>
           </div>
-          <div class="table-mobile-row" style="border-bottom: none; padding-top: var(--spacing-md);">
+          <div class="table-mobile-row delete-row">
             <form method="POST" action="{{ url_for('main.delete_driver', employee_id=driver.employee_id) }}" style="display: inline; width:100%;" onsubmit="return confirm('Weet je zeker dat je deze chauffeur wilt verwijderen?');">
-              <button type="submit" class="btn btn-danger btn-block">Verwijderen</button>
+              <button type="submit" class="btn btn-danger mobile-delete-btn">Verwijderen</button>
             </form>
           </div>
         </div>
