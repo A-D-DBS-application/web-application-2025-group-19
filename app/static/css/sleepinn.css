@@ -642,6 +642,10 @@ textarea.form-input {
   display: none;
 }
 
+.auth-page .navbar-toggle {
+  display: none !important;
+}
+
 /* Desktop: show navbar nav normally */
 .navbar-nav {
   display: flex;
