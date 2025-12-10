@@ -339,15 +339,15 @@ a:hover {
 /* === CARDS === */
 .card {
   background: var(--color-white);
-  border: 1px solid rgba(126, 184, 218, 0.25);
+  border: 1px solid rgba(126, 184, 218, 0.18);
   border-radius: var(--radius-lg);
-  box-shadow: 0 1px 3px rgba(126, 184, 218, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   transition: all var(--transition-normal);
 }
 
 .card:hover {
-  border-color: rgba(126, 184, 218, 0.4);
-  box-shadow: 0 4px 12px rgba(126, 184, 218, 0.15), 0 2px 4px rgba(0, 0, 0, 0.05);
+  border-color: rgba(126, 184, 218, 0.3);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
 }
 
 .card-header {
@@ -414,15 +414,17 @@ textarea.form-input {
 /* === TABLES === */
 .table-container {
   background: var(--color-white);
-  border: 1px solid rgba(126, 184, 218, 0.25);
+  border: 1px solid rgba(126, 184, 218, 0.18);
   border-radius: var(--radius-lg);
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(126, 184, 218, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
+  box-sizing: border-box;
 }
 
 .table th {
@@ -444,12 +446,137 @@ textarea.form-input {
   border-bottom: 1px solid rgba(0, 0, 0, 0.04);
 }
 
+.table th:first-child {
+  border-top-left-radius: var(--radius-lg);
+}
+
+.table th:last-child {
+  border-top-right-radius: var(--radius-lg);
+}
+
 .table tr:last-child td {
   border-bottom: none;
 }
 
 .table tr:hover td {
   background: rgba(126, 184, 218, 0.06);
+}
+
+/* Ensure tables stay inside cards on mobile */
+.card .card-body {
+  overflow-x: auto;
+}
+
+/* Mobile-friendly table cards (listings) */
+.table-mobile-view {
+  display: none;
+}
+
+.table-mobile-card {
+  background: var(--color-white);
+  border: 1px solid rgba(126, 184, 218, 0.18);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+.table-mobile-card:last-child {
+  margin-bottom: 0;
+}
+
+.table-mobile-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs) 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.table-mobile-row:last-child {
+  border-bottom: none;
+}
+
+.table-mobile-label {
+  font-size: 0.85rem;
+  color: var(--color-medium-gray);
+  flex: 0 0 42%;
+}
+
+.table-mobile-value {
+  font-size: 0.95rem;
+  color: var(--color-dark-gray);
+  flex: 1;
+  text-align: right;
+}
+
+@media (max-width: 768px) {
+  .table th,
+  .table td {
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: 0.8125rem;
+    word-break: break-word;
+  }
+  
+  .table .badge {
+    font-size: 0.7rem;
+    padding: 0.2rem 0.5rem;
+    white-space: nowrap;
+  }
+  
+  .table-container {
+    overflow-x: hidden;
+  }
+
+  /* Show mobile cards, hide desktop table */
+  .table {
+    display: none;
+  }
+  .table-mobile-view {
+    display: block;
+    padding: var(--spacing-sm) 0;
+  }
+
+  /* Compact badges inside mobile cards */
+  .table-mobile-card .badge {
+    font-size: 0.7rem;
+    padding: 0.2rem 0.5rem;
+    white-space: nowrap;
+  }
+
+  /* Compact page header and actions */
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-sm);
+  }
+  .page-header .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Compact card paddings */
+  .card {
+    padding: var(--spacing-md);
+    margin-bottom: var(--spacing-md);
+  }
+  .card-header,
+  .card-body,
+  .card-footer {
+    padding: var(--spacing-md);
+  }
+  .page-subtitle {
+    font-size: 0.95rem;
+  }
+
+  /* Let page background show between mobile cards */
+  .table-container {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+  }
 }
 
 /* === ALERTS === */
@@ -511,16 +638,16 @@ textarea.form-input {
 /* === STAT CARDS === */
 .stat-card {
   background: var(--color-white);
-  border: 1px solid rgba(126, 184, 218, 0.25);
+  border: 1px solid rgba(126, 184, 218, 0.18);
   border-radius: var(--radius-lg);
   padding: var(--spacing-lg);
   transition: all var(--transition-normal);
-  box-shadow: 0 1px 3px rgba(126, 184, 218, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .stat-card:hover {
-  border-color: rgba(126, 184, 218, 0.4);
-  box-shadow: 0 4px 12px rgba(126, 184, 218, 0.15), 0 2px 4px rgba(0, 0, 0, 0.05);
+  border-color: rgba(126, 184, 218, 0.3);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
 }
 
 .stat-card-label {
@@ -636,6 +763,7 @@ textarea.form-input {
 .grid { display: grid; }
 .grid-cols-2 { grid-template-columns: repeat(2, 1fr); }
 .grid-cols-3 { grid-template-columns: repeat(3, 1fr); }
+.span-2 { grid-column: span 2; }
 
 /* Mobile menu toggle - hidden by default (desktop) */
 .navbar-toggle {
@@ -658,6 +786,10 @@ textarea.form-input {
   .grid-cols-2,
   .grid-cols-3 {
     grid-template-columns: 1fr;
+  }
+  
+  .span-2 {
+    grid-column: auto;
   }
   
   /* Mobile: show toggle button */

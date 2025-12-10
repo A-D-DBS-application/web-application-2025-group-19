@@ -12,7 +12,7 @@
   <a href="{{ url_for('main.listings') }}" class="stat-card">
     <div class="stat-card-label">Geplande Leveringen</div>
     <div class="stat-card-value">{{ deliveries_total }}</div>
-    <div class="stat-card-meta">Vandaag: {{ deliveries_today }}</div>
+    <div class="stat-card-meta">Gepland vandaag: {{ deliveries_today }}</div>
   </a>
   
   <a href="{{ url_for('main.drivers_list') }}" class="stat-card">
@@ -30,7 +30,7 @@
 
 <div class="grid grid-cols-3 gap-4">
   <!-- Aankomende Leveringen -->
-  <div class="card" style="grid-column: span 2;">
+  <div class="card span-2">
     <div class="card-header flex justify-between items-center">
       <div>
         <h3 class="font-semibold">Aankomende Leveringen</h3>
