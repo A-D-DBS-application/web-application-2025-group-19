@@ -168,7 +168,8 @@ def index():
             Region.name,
             DeliveryRun.scheduled_date,
             RegionAddress.address,
-            Delivery.delivery_status
+            Delivery.delivery_status,
+            Customer.municipality  # Get municipality from Customer
         ).outerjoin(
             DeliveryRun,
             (Delivery.tenant_id == DeliveryRun.tenant_id) & (Delivery.run_id == DeliveryRun.run_id)
@@ -178,6 +179,9 @@ def index():
         ).outerjoin(
             CustomerOrder,
             (Delivery.tenant_id == CustomerOrder.tenant_id) & (Delivery.order_id == CustomerOrder.order_id)
+        ).outerjoin(
+            Customer,
+            (CustomerOrder.tenant_id == Customer.tenant_id) & (CustomerOrder.customer_id == Customer.customer_id)
         ).outerjoin(
             RegionAddress,
             (DeliveryRun.tenant_id == RegionAddress.tenant_id) & 
@@ -214,12 +218,13 @@ def index():
         seen_combinations = set()
         unique_deliveries = []
         
-        for d_id, o_id, region_name, sched_date, address, status in upcoming_deliveries:
+        for d_id, o_id, region_name, sched_date, address, status, customer_municipality in upcoming_deliveries:
             # Only show future deliveries
             if sched_date and sched_date < today:
                 continue
                 
-            municipality = extract_municipality(address) if address else (region_name or 'N/A')
+            # Use municipality from Customer first, then from address, then from region name
+            municipality = customer_municipality if customer_municipality else (extract_municipality(address) if address else (region_name or 'N/A'))
             
             # Create unique key: municipality + date
             unique_key = (municipality, sched_date)
@@ -270,10 +275,19 @@ def listings():
                 # Unpack: delivery_id, product_name, municipality, status, order_date, scheduled_date, region_id
                 d_id, product_name, municipality, status, order_date, sched_date, r_id = row
 
+                # Parse delivery_hour from product_name if it contains " | Uur: "
+                product_description = product_name or 'Onbekend product'
+                delivery_hour = None
+                if product_description and " | Uur: " in product_description:
+                    parts = product_description.split(" | Uur: ", 1)
+                    product_description = parts[0]
+                    delivery_hour = parts[1] if len(parts) > 1 else None
+
                 # Build display info - show product_name (description) instead of product_id
                 items.append({
                     "delivery_id": d_id,
-                    "product_description": product_name or 'Onbekend product',  # Use product name/description
+                    "product_description": product_description,
+                    "delivery_hour": delivery_hour,
                     "municipality": municipality or 'N/A',  # Use actual municipality from RegionAddress
                     "status": str(status).split('.')[-1] if status else 'unknown',  # Extract enum value
                     "scheduled_date": sched_date
@@ -928,7 +942,11 @@ def schedule():
             db.session.flush()
 
         # create a new order with the product description
-        new_order_id = add_order(tenant_id=tid, customer_id=customer.customer_id, location_id=loc.location_id, seller_id=session["employee_id"], product_name=product_description)
+        # Append delivery_hour to product_description if provided (format: "Product | Uur: 14:00-16:00")
+        product_name_with_hour = product_description
+        if delivery_hour:
+            product_name_with_hour = f"{product_description} | Uur: {delivery_hour}"
+        new_order_id = add_order(tenant_id=tid, customer_id=customer.customer_id, location_id=loc.location_id, seller_id=session["employee_id"], product_name=product_name_with_hour)
         order_id = int(new_order_id)
         current_app.logger.info(f"Created order {order_id} for scheduling with product: {product_description}")
     except Exception as e:
