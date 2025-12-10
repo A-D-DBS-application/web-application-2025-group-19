@@ -296,7 +296,7 @@ class DeliveryRun(db.Model):
     scheduled_date  = db.Column(db.Date, nullable=False)
     region_id       = db.Column(db.Integer)
     driver_id       = db.Column(db.Integer)
-    truck_id        = db.Column(db.Integer)  # Link naar fysieke truck
+    # truck_id removed - column doesn't exist in database
     capacity        = db.Column(db.Integer, default=10)   # max stops (optioneel)
     status          = db.Column(db.Enum(RunStatus, name="run_status", native_enum=True),
                                 default=RunStatus.planned)
@@ -308,9 +308,7 @@ class DeliveryRun(db.Model):
         ForeignKeyConstraint(["tenant_id", "driver_id"],
                              ["employee.tenant_id", "employee.employee_id"],
                              ondelete="SET NULL"),
-        ForeignKeyConstraint(["tenant_id", "truck_id"],
-                             ["truck.tenant_id", "truck.truck_id"],
-                             ondelete="SET NULL"),
+        # ForeignKeyConstraint for truck_id removed - column doesn't exist in database
         Index("idx_run_region_date", "tenant_id", "region_id", "scheduled_date"),
     )
 
@@ -462,8 +460,8 @@ def get_timeslot_duration(product_category_or_name: str) -> int:
 def ensure_product(tenant_id: int, product_name: str) -> Product:
     p = Product.query.filter_by(tenant_id=tenant_id, name=product_name).first()
     if not p:
-        product_id = get_next_product_id(tenant_id)
-        p = Product(tenant_id=tenant_id, product_id=product_id, name=product_name, category="custom", stock_qty=9999)
+        # Don't set product_id - let PostgreSQL generate it automatically (IDENTITY column)
+        p = Product(tenant_id=tenant_id, name=product_name, category="custom", stock_qty=9999)
         db.session.add(p)
         db.session.flush()  # krijg product_id
     return p
@@ -484,15 +482,15 @@ def get_run_planned_minutes(tenant_id: int, run_id: int) -> int:
 def add_order(tenant_id: int, customer_id: int, location_id: int, seller_id: int,
               product_name: str) -> int:
     product = ensure_product(tenant_id, product_name)
-    order_id = get_next_order_id(tenant_id)
+    # Don't set order_id - let PostgreSQL generate it automatically (IDENTITY column)
     order = CustomerOrder(
-        tenant_id=tenant_id, order_id=order_id, customer_id=customer_id, location_id=location_id,
+        tenant_id=tenant_id, customer_id=customer_id, location_id=location_id,
         seller_id=seller_id, order_date=date.today(), status=OrderStatus.new
     )
     db.session.add(order)
     db.session.flush()  # krijg order_id
-    order_item_id = get_next_order_item_id(tenant_id)
-    item = OrderItem(tenant_id=tenant_id, order_item_id=order_item_id, order_id=order.order_id,
+    # Don't set order_item_id - let PostgreSQL generate it automatically (IDENTITY column)
+    item = OrderItem(tenant_id=tenant_id, order_id=order.order_id,
                      product_id=product.product_id, quantity=1)
     db.session.add(item)
     db.session.commit()
@@ -519,9 +517,9 @@ def upsert_run_and_attach_delivery_with_capacity(
         # When attaching a delivery via scheduling, mark the run as active so it
         # does not count as an available (manually added) truck. Manually added
         # trucks created via the add-truck UI will use RunStatus.planned.
-        run_id = get_next_run_id(tenant_id)
+        # Don't set run_id - let PostgreSQL generate it automatically (IDENTITY column)
         run = DeliveryRun(
-            tenant_id=tenant_id, run_id=run_id, scheduled_date=scheduled_date,
+            tenant_id=tenant_id, scheduled_date=scheduled_date,
             region_id=region_id, driver_id=driver_id,
             capacity=10, status=RunStatus.in_progress
         )
@@ -550,9 +548,9 @@ def upsert_run_and_attach_delivery_with_capacity(
             raise ValueError("Maximaal aantal stops bereikt voor deze route/dag.")
 
     # 4) delivery koppelen
-    delivery_id = get_next_delivery_id(tenant_id)
+    # Don't set delivery_id - let PostgreSQL generate it automatically (IDENTITY column)
     delivery = Delivery(
-        tenant_id=tenant_id, delivery_id=delivery_id, order_id=order_id, run_id=run.run_id,
+        tenant_id=tenant_id, order_id=order_id, run_id=run.run_id,
         delivery_status=DeliveryStatus.scheduled
     )
     db.session.add(delivery)

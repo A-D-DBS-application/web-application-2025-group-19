@@ -917,11 +917,9 @@ def schedule():
         location_address = address if address else "Demo Street 1"
         loc = Location.query.filter_by(tenant_id=tid, name="Demo Store").first()
         if not loc:
-            from .models import get_next_location_id
-            location_id = get_next_location_id(tid)
+            # Don't set location_id - let PostgreSQL generate it automatically (IDENTITY column)
             loc = Location(
                 tenant_id=tid,
-                location_id=location_id,
                 name="Demo Store",
                 address=location_address,
                 region_id=region_id,
