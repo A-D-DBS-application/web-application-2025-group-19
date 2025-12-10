@@ -638,6 +638,7 @@
             ...calendarData[s.date], // Keep existing availability data
             count: s.delivery_count,
             spots_left: s.spots_left,
+            max_deliveries: s.max_deliveries || 13, // Max leveringen per regio
             region_id: s.region_id,
             region_name: s.region_name,
             available_drivers: s.available_drivers,
@@ -719,7 +720,7 @@
     return '—';
   }
 
-  function selectDate(dateStr, regionId, regionName, deliveryCount) {
+  function selectDate(dateStr, regionId, regionName, deliveryCount, maxDeliveries) {
     document.getElementById('scheduled-date').value = dateStr;
     selectedCalendarDate = dateStr;
     
@@ -731,6 +732,10 @@
     const addressInput = document.getElementById('delivery-address');
     const municipality = addressInput && addressInput.value ? extractMunicipalityFromAddress(addressInput.value) : '—';
     
+    // Haal max leveringen uit calendarData als beschikbaar
+    const dayData = calendarData[dateStr] || {};
+    const maxDeliveriesForRegion = maxDeliveries || dayData.max_deliveries || 13;
+    
     if (regionId) {
       document.getElementById('selected-region-id').value = regionId;
       document.getElementById('region-input').value = regionName || '';
@@ -738,7 +743,7 @@
       detailsDiv.innerHTML = `
         <div class="grid grid-cols-2 gap-3">
           <div><p class="text-xs text-muted">Gemeente</p><p class="font-medium">${municipality}</p></div>
-          <div><p class="text-xs text-muted">Leveringen</p><p class="font-medium">${deliveryCount || 0} van 13</p></div>
+          <div><p class="text-xs text-muted">Leveringen</p><p class="font-medium">${deliveryCount || 0} van ${maxDeliveriesForRegion}</p></div>
           <div><p class="text-xs text-muted">Datum</p><p class="font-medium">${formatDate(dateStr)}</p></div>
           <div><p class="text-xs text-muted">Status</p><p class="font-medium badge badge-success" style="display: inline-block;">Beschikbaar</p></div>
         </div>
@@ -751,7 +756,7 @@
         <div class="grid grid-cols-2 gap-3">
           <div><p class="text-xs text-muted">Gemeente</p><p class="font-medium">${municipality}</p></div>
           <div><p class="text-xs text-muted">Datum</p><p class="font-medium">${formatDate(dateStr)}</p></div>
-          <div><p class="text-xs text-muted">Leveringen</p><p class="font-medium">0 van 13</p></div>
+          <div><p class="text-xs text-muted">Leveringen</p><p class="font-medium">0 van ${maxDeliveriesForRegion}</p></div>
           <div><p class="text-xs text-muted">Status</p><p class="font-medium badge badge-success" style="display: inline-block;">Beschikbaar</p></div>
         </div>
       `;
@@ -841,12 +846,13 @@
       dayCell.textContent = day;
       
       // Helper: is er minstens 1 chauffeur beschikbaar?
+      // STRENG: alleen true als er expliciet chauffeurs beschikbaar zijn
       const hasDriversAvailable = (info) => {
-        if (!info) return true;
-        const totalDrivers = info.total_drivers_in_system;
-        const availableDrivers = info.available_drivers;
-        if (totalDrivers === undefined || totalDrivers === 0) return true; // geen beperking in systeem
-        return (availableDrivers || 0) > 0;
+        if (!info) return false; // Geen info = geen chauffeurs beschikbaar
+        const totalDrivers = info.total_drivers_in_system || 0;
+        const availableDrivers = info.available_drivers || 0;
+        // Alleen beschikbaar als er chauffeurs in het systeem zijn EN minstens 1 beschikbaar is
+        return totalDrivers > 0 && availableDrivers > 0;
       };
       
       if (isPast) {
@@ -862,27 +868,30 @@
         // 1) Regio-specifieke data (uit suggesties / adres)
         if (dayData && dayData.spots_left !== undefined) {
           const driversOk = hasDriversAvailable(dayData);
+          const maxDeliveries = dayData.max_deliveries || 13;
           if (dayData.spots_left <= 0) {
-            blockedReason = 'Regio vol (13 leveringen)';
+            blockedReason = `Regio vol (${maxDeliveries} leveringen)`;
           } else if (!driversOk) {
             blockedReason = 'Geen chauffeurs beschikbaar';
           } else {
             isAvailable = true;
-            onSelect = () => selectDate(dateStr, dayData.region_id, dayData.region_name, dayData.count);
+            onSelect = () => selectDate(dateStr, dayData.region_id, dayData.region_name, dayData.count, maxDeliveries);
           }
         }
         // 2) Algemene capaciteit (chauffeurs/trucks) indien geen regio-data
         else if (capacityInfo !== undefined && capacityInfo !== null) {
           const driversOk = hasDriversAvailable(capacityInfo);
-          const underLimit = (capacityInfo.total_deliveries || 0) < 13;
+          // Gebruik default max leveringen (13) als er geen regio-specifieke data is
+          const defaultMaxDeliveries = 13;
+          const underLimit = (capacityInfo.total_deliveries || 0) < defaultMaxDeliveries;
           if (driversOk && underLimit) {
             isAvailable = true;
-            onSelect = () => selectDate(dateStr, null, null, 0);
+            onSelect = () => selectDate(dateStr, null, null, 0, defaultMaxDeliveries);
           } else {
             if (!driversOk) {
               blockedReason = 'Geen chauffeurs beschikbaar';
             } else if (!underLimit) {
-              blockedReason = 'Regio vol (13 leveringen)';
+              blockedReason = `Regio vol (${defaultMaxDeliveries} leveringen)`;
             } else {
               blockedReason = capacityInfo.reason || 'Geen capaciteit';
             }
@@ -891,17 +900,20 @@
         // 3) Gebufferde capaciteit in calendarData (indien al gecheckt)
         else if (dayData && dayData.capacity_checked !== undefined) {
           const driversOk = hasDriversAvailable(dayData);
+          const maxDeliveries = dayData.max_deliveries || 13;
           if (dayData.is_available && driversOk) {
             isAvailable = true;
-            onSelect = () => selectDate(dateStr, null, null, 0);
+            onSelect = () => selectDate(dateStr, null, null, 0, maxDeliveries);
           } else {
             blockedReason = dayData.reason || (!driversOk ? 'Geen chauffeurs beschikbaar' : 'Geen capaciteit');
           }
         }
-        // 4) Geen data: standaard beschikbaar en async checken
+        // 4) Geen data: NIET standaard beschikbaar - eerst checken of er chauffeurs zijn
         else {
-          isAvailable = true;
-          onSelect = () => selectDate(dateStr, null, null, 0);
+          // Standaard NIET beschikbaar totdat we weten dat er chauffeurs zijn
+          isAvailable = false;
+          blockedReason = 'Controleren beschikbaarheid...';
+          // Check asynchroon de capaciteit
           checkDayCapacity(dateStr, dayCell);
         }
         
@@ -964,36 +976,59 @@
         if (!calendarData[dateStr]) {
           calendarData[dateStr] = {};
         }
-        const driversOk = (data.total_drivers_in_system === 0) || (data.available_drivers || 0) > 0;
+        // STRENG: alleen beschikbaar als er expliciet chauffeurs beschikbaar zijn
+        const totalDrivers = data.total_drivers_in_system || 0;
+        const availableDrivers = data.available_drivers || 0;
+        const driversOk = totalDrivers > 0 && availableDrivers > 0;
         const underLimit = (data.total_deliveries || 0) < 13;
+        
+        // Gebruik default max leveringen (13) als er geen regio-specifieke data is
+        const defaultMaxDeliveries = 13;
         calendarData[dateStr] = {
           ...calendarData[dateStr],
           capacity_checked: true,
           is_available: driversOk && underLimit,
+          max_deliveries: defaultMaxDeliveries, // Store max leveringen
           available_drivers: data.available_drivers,
           total_drivers_in_system: data.total_drivers_in_system,
           available_trucks: data.available_trucks,
           total_deliveries: data.total_deliveries,
-          reason: data.reason
+          reason: !driversOk ? 'Geen chauffeurs beschikbaar' : (!underLimit ? `Regio vol (${defaultMaxDeliveries} leveringen)` : (data.reason || null))
         };
         
         // Update the cell styling if dayCell is provided (during render)
         if (dayCell) {
-          if (!(driversOk && underLimit)) {
+          if (driversOk && underLimit) {
+            // Maak beschikbaar (groen)
+            dayCell.classList.remove('blocked');
+            dayCell.classList.add('available');
+            dayCell.title = '';
+            const defaultMaxDeliveries = 13;
+            const onSelect = () => selectDate(dateStr, null, null, 0, defaultMaxDeliveries);
+            dayCell.onclick = onSelect;
+            // Add touch event
+            dayCell.addEventListener('touchend', function(e) {
+              e.preventDefault();
+              e.stopPropagation();
+              onSelect();
+            }, { passive: false });
+          } else {
+            // Blijf geblokkeerd (rood)
             dayCell.classList.remove('available');
             dayCell.classList.add('blocked');
             if (!driversOk) {
               dayCell.title = 'Geen chauffeurs beschikbaar';
             } else if (!underLimit) {
-              dayCell.title = 'Regio vol (13 leveringen)';
+              // Gebruik default max leveringen (13) als er geen regio-specifieke data is
+              const defaultMaxDeliveries = 13;
+              dayCell.title = `Regio vol (${defaultMaxDeliveries} leveringen)`;
             } else {
-              dayCell.title = data.reason || 'Geen capaciteit (chauffeurs/trucks)';
+              dayCell.title = data.reason || 'Geen capaciteit';
             }
             dayCell.onclick = null;
             // Remove any existing touch listeners by cloning
             const newCell = dayCell.cloneNode(true);
             dayCell.parentNode.replaceChild(newCell, dayCell);
-            dayCell = newCell;
           }
         } else {
           // If no dayCell, trigger a re-render to update the calendar
@@ -1002,16 +1037,29 @@
       })
       .catch(error => {
         console.error('Capacity check failed for', dateStr, error);
-        // Keep as available on error
-        capacityCache[dateStr] = { is_valid: true };
+        // Bij error: NIET beschikbaar (rood blijven)
+        capacityCache[dateStr] = { error: true };
         if (!calendarData[dateStr]) {
           calendarData[dateStr] = {};
         }
         calendarData[dateStr] = {
           ...calendarData[dateStr],
           capacity_checked: true,
-          is_available: true
+          is_available: false,
+          reason: 'Fout bij controleren beschikbaarheid'
         };
+        
+        if (dayCell) {
+          dayCell.classList.remove('available');
+          dayCell.classList.add('blocked');
+          dayCell.title = 'Fout bij controleren beschikbaarheid';
+          dayCell.onclick = null;
+          // Remove touch listeners
+          const newCell = dayCell.cloneNode(true);
+          dayCell.parentNode.replaceChild(newCell, dayCell);
+        }
+        
+        renderCalendar();
       });
   }
 

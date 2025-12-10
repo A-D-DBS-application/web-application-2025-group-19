@@ -527,7 +527,15 @@ def upsert_run_and_attach_delivery_with_capacity(
         db.session.add(run)
         db.session.flush()  # krijg run_id
 
-    # 2) capaciteitscontrole - simplified
+    # 2) Check regio-specifieke max leveringen per dag
+    region = Region.query.filter_by(tenant_id=tenant_id, region_id=region_id).first()
+    if region:
+        max_deliveries = region.max_deliveries_per_day or 13
+        delivery_count = count_deliveries_for_region_date(tenant_id, region_id, scheduled_date)
+        if delivery_count >= max_deliveries:
+            raise ValueError(f"Deze regio heeft al {max_deliveries} leveringen op {scheduled_date.strftime('%d-%m-%Y')}. Maximum aantal leveringen per dag bereikt.")
+    
+    # 3) capaciteitscontrole - simplified
     add_minutes = compute_order_minutes(tenant_id, order_id)
     used_minutes = get_run_planned_minutes(tenant_id, run.run_id)
     max_minutes = 480  # 8 uur standaard
@@ -540,7 +548,7 @@ def upsert_run_and_attach_delivery_with_capacity(
         if current_stops + 1 > run.capacity:
             raise ValueError("Maximaal aantal stops bereikt voor deze route/dag.")
 
-    # 3) delivery koppelen
+    # 4) delivery koppelen
     delivery_id = get_next_delivery_id(tenant_id)
     delivery = Delivery(
         tenant_id=tenant_id, delivery_id=delivery_id, order_id=order_id, run_id=run.run_id,
@@ -965,6 +973,7 @@ def get_suggested_dates_for_address(tenant_id: int, lat: float, lng: float, days
                     "distance_km": distance,
                     "delivery_count": delivery_count,
                     "spots_left": region_max_deliveries - delivery_count,
+                    "max_deliveries": region_max_deliveries,  # Voeg max leveringen toe aan response
                     # Extra capaciteitsinfo
                     "available_drivers": capacity_info["available_drivers"],
                     "available_trucks": capacity_info["available_trucks"],

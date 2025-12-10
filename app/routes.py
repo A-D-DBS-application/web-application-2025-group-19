@@ -737,10 +737,11 @@ def schedule():
                 region = Region.query.filter_by(tenant_id=tid, region_id=region_id).first()
                 
                 if region:
-                    # Check capaciteit (max 13 leveringen)
+                    # Check capaciteit (max leveringen per regio instelling)
                     delivery_count = count_deliveries_for_region_date(tid, region_id, scheduled_date)
-                    if delivery_count >= 13:
-                        flash(f"Deze regio heeft al 13 leveringen op {scheduled_date.strftime('%d-%m-%Y')}. Kies een andere datum.", "error")
+                    max_deliveries = region.max_deliveries_per_day or 13
+                    if delivery_count >= max_deliveries:
+                        flash(f"Deze regio heeft al {max_deliveries} leveringen op {scheduled_date.strftime('%d-%m-%Y')}. Kies een andere datum.", "error")
                         return redirect(url_for("main.add_listing"))
                     
                     # Voeg adres toe aan regio en herbereken centrum
@@ -758,15 +759,17 @@ def schedule():
                 closest_region = matching_regions[0]["region"]
                 region_id = closest_region.region_id
                 
-                # Check capaciteit
+                # Check capaciteit (max leveringen per regio instelling)
                 delivery_count = count_deliveries_for_region_date(tid, region_id, scheduled_date)
-                if delivery_count >= 13:
+                max_deliveries = closest_region.max_deliveries_per_day or 13
+                if delivery_count >= max_deliveries:
                     # Probeer de volgende dichtstbijzijnde regio
                     found_available = False
                     for match in matching_regions[1:]:
                         r = match["region"]
                         count = count_deliveries_for_region_date(tid, r.region_id, scheduled_date)
-                        if count < 13:
+                        r_max = r.max_deliveries_per_day or 13
+                        if count < r_max:
                             region_id = r.region_id
                             found_available = True
                             break
@@ -1116,6 +1119,7 @@ def suggest_dates_by_location():
 def check_region_capacity():
     """
     Check de capaciteit van een regio voor een specifieke datum.
+    Gebruikt de regio-specifieke max_deliveries_per_day instelling.
     """
     if "employee_id" not in session:
         return jsonify({"error": "Not authenticated"}), 401
@@ -1128,8 +1132,13 @@ def check_region_capacity():
         return jsonify({"error": "Invalid parameters"}), 400
     
     tid = tenant_id()
-    max_deliveries = 13
     
+    # Haal regio op om max_deliveries_per_day te krijgen
+    region = Region.query.filter_by(tenant_id=tid, region_id=region_id).first()
+    if not region:
+        return jsonify({"error": "Region not found"}), 404
+    
+    max_deliveries = region.max_deliveries_per_day or 13
     delivery_count = count_deliveries_for_region_date(tid, region_id, check_date)
     
     return jsonify({
