@@ -37,9 +37,9 @@
       <!-- Beschikbaarheidskalender -->
       <div class="form-group mt-4">
         <label class="form-label">Beschikbaarheidsdatums</label>
-        <div class="card" style="margin-top: 0.5rem;">
+        <div class="card availability-calendar-card" style="margin-top: 0.5rem;">
           <div class="card-body">
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
+            <div class="availability-calendar-grid">
               <!-- Maand 1 -->
               <div>
                 <h4 id="month1-label" class="font-medium text-center mb-3" style="color: var(--color-navy);"></h4>
@@ -145,24 +145,61 @@
               {% endif %}
             </td>
             <td class="text-center">
-              <div class="flex justify-center gap-2">
-                <a href="{{ url_for('main.export_driver_schedule_ical', employee_id=driver.employee_id) }}" class="btn btn-ghost btn-sm" title="Exporteer schema naar kalender (.ics)">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                    <line x1="16" y1="2" x2="16" y2="6"></line>
-                    <line x1="8" y1="2" x2="8" y2="6"></line>
-                    <line x1="3" y1="10" x2="21" y2="10"></line>
-                  </svg>
-                </a>
-                <form method="POST" action="{{ url_for('main.delete_driver', employee_id=driver.employee_id) }}" style="display: inline;" onsubmit="return confirm('Weet je zeker dat je deze chauffeur wilt verwijderen?');">
-                  <button type="submit" class="btn btn-danger btn-sm">Verwijderen</button>
-                </form>
-              </div>
+              <form method="POST" action="{{ url_for('main.delete_driver', employee_id=driver.employee_id) }}" style="display: inline;" onsubmit="return confirm('Weet je zeker dat je deze chauffeur wilt verwijderen?');">
+                <button type="submit" class="btn btn-danger btn-sm">Verwijderen</button>
+              </form>
             </td>
           </tr>
         {% endfor %}
       </tbody>
     </table>
+
+    <!-- Mobile card view -->
+    <div class="table-mobile-view" style="display: none;">
+      {% for driver in drivers %}
+        <div class="table-mobile-card">
+          <div class="table-mobile-row">
+            <div class="table-mobile-label">Naam</div>
+            <div class="table-mobile-value font-medium">
+              {{ driver.name or (driver.first_name + ' ' + driver.last_name) }}
+            </div>
+          </div>
+          <div class="table-mobile-row">
+            <div class="table-mobile-label">E-mailadres</div>
+            <div class="table-mobile-value">
+              {{ driver.email or '—' }}
+            </div>
+          </div>
+          <div class="table-mobile-row">
+            <div class="table-mobile-label">Beschikbaarheid</div>
+            <div class="table-mobile-value">
+              {% if driver.available_dates and driver.available_dates|length > 0 %}
+                {% if driver.available_today %}
+                  <span class="badge badge-success">Beschikbaar vandaag</span>
+                  {% if driver.available_dates|length > 1 %}
+                    <span class="text-muted" style="display:block; margin-top:4px; font-size:0.875rem;">
+                      Ook: {{ driver.available_dates|join(', ') }}
+                    </span>
+                  {% endif %}
+                {% else %}
+                  <span class="text-muted">{{ driver.available_dates|join(', ') }}</span>
+                {% endif %}
+              {% else %}
+                <span class="text-muted">Geen beschikbaarheid</span>
+              {% endif %}
+            </div>
+          </div>
+          <div class="table-mobile-row" style="border-bottom: none; padding-top: var(--spacing-md);">
+            <form method="POST" action="{{ url_for('main.delete_driver', employee_id=driver.employee_id) }}" style="display: inline; width:100%;" onsubmit="return confirm('Weet je zeker dat je deze chauffeur wilt verwijderen?');">
+              <button type="submit" class="btn btn-danger btn-block">Verwijderen</button>
+            </form>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+    <div class="card-footer">
+      <p class="text-small text-muted">Totaal: <strong>{{ drivers | length }}</strong> chauffeur{% if drivers | length != 1 %}s{% endif %}</p>
+    </div>
   {% else %}
     <div class="empty-state">
       <svg class="empty-state-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1">
@@ -173,6 +210,21 @@
     </div>
   {% endif %}
 </div>
+
+<script>
+  // Show mobile view on mobile devices (match geplande leveringen gedrag)
+  if (window.innerWidth <= 768) {
+    const tableContainers = document.querySelectorAll('.table-container');
+    tableContainers.forEach(container => {
+      const table = container.querySelector('.table');
+      const mobileView = container.querySelector('.table-mobile-view');
+      if (table && mobileView) {
+        table.style.display = 'none';
+        mobileView.style.display = 'block';
+      }
+    });
+  }
+</script>
 
 <style>
   .calendar-day {
@@ -232,6 +284,24 @@
   
   .calendar-day.selected:hover {
     background: #059669 !important;
+  }
+
+  /* Responsive grid similar to Nieuwe Levering planner */
+  .availability-calendar-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+  }
+
+  @media (max-width: 768px) {
+    .availability-calendar-grid {
+      grid-template-columns: 1fr;
+      gap: var(--spacing-md);
+    }
+
+    .availability-calendar-card .card-body {
+      padding: var(--spacing-md);
+    }
   }
 </style>
 
