@@ -22,6 +22,7 @@
           <input type="hidden" name="selected_region_id" id="selected-region-id" value="">
           <input type="hidden" name="region_id" id="region-input" value="">
           <input type="hidden" name="municipality" id="municipality-input" value="">
+          <input type="hidden" name="half_day" id="half-day-input" value="am">
 
           <div class="form-group">
             <label class="form-label">Adres</label>
@@ -31,7 +32,7 @@
 
           <!-- Kalender Overzicht - 2 Maanden -->
           <div class="form-group" id="calendar-section">
-            <label class="form-label">Leveringskalender</label>
+            <label class="form-label">Leveringskalender (klik boven voor voormiddag, onder voor namiddag)</label>
             <div class="card">
               <div class="card-body">
                 <!-- Legenda -->
@@ -68,7 +69,7 @@
                       <div class="text-center text-xs font-medium text-muted" style="padding: 6px 0;">Za</div>
                       <div class="text-center text-xs font-medium text-muted" style="padding: 6px 0;">Zo</div>
                     </div>
-                    <div id="month1-days" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px;"></div>
+                    <div id="month1-days" class="calendar-grid-split"></div>
                   </div>
                   
                   <!-- Maand 2 -->
@@ -83,7 +84,7 @@
                       <div class="text-center text-xs font-medium text-muted" style="padding: 6px 0;">Za</div>
                       <div class="text-center text-xs font-medium text-muted" style="padding: 6px 0;">Zo</div>
                     </div>
-                    <div id="month2-days" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px;"></div>
+                    <div id="month2-days" class="calendar-grid-split"></div>
                   </div>
                 </div>
                 
@@ -565,6 +566,7 @@
   let geocodeTimeout = null;
   let calendarData = {}; // Stores delivery counts per date
   let selectedCalendarDate = null;
+  let selectedHalfDay = 'am';
 
   document.addEventListener('DOMContentLoaded', function() {
     initAddressGeocoding();
@@ -788,9 +790,11 @@
     return '—';
   }
 
-  function selectDate(dateStr, regionId, regionName, deliveryCount, maxDeliveries) {
+  function selectDate(dateStr, regionId, regionName, deliveryCount, maxDeliveries, halfDay = 'am') {
     document.getElementById('scheduled-date').value = dateStr;
+    document.getElementById('half-day-input').value = halfDay;
     selectedCalendarDate = dateStr;
+    selectedHalfDay = halfDay;
     
     // Show region info (always show, even if no region selected)
     const infoDiv = document.getElementById('region-info');
@@ -928,16 +932,28 @@
       const isSelected = dateStr === selectedCalendarDate;
       
       const dayCell = document.createElement('div');
-      dayCell.className = 'calendar-day';
-      dayCell.textContent = day;
+      dayCell.className = 'calendar-day split';
+      const dayNumber = document.createElement('div');
+      dayNumber.className = 'day-number';
+      dayNumber.textContent = day;
+      dayCell.appendChild(dayNumber);
+      
+      const slots = document.createElement('div');
+      slots.className = 'slots';
+      
+      const amSlot = document.createElement('div');
+      amSlot.className = 'half-slot am-slot';
+      amSlot.textContent = 'VM';
+      const pmSlot = document.createElement('div');
+      pmSlot.className = 'half-slot pm-slot';
+      pmSlot.textContent = 'NM';
       
       // Helper: is er minstens 1 chauffeur beschikbaar?
       // STRENG: alleen true als er expliciet chauffeurs beschikbaar zijn
       const hasDriversAvailable = (info) => {
-        if (!info) return false; // Geen info = geen chauffeurs beschikbaar
+        if (!info) return false;
         const totalDrivers = info.total_drivers_in_system || 0;
         const availableDrivers = info.available_drivers || 0;
-        // Alleen beschikbaar als er chauffeurs in het systeem zijn EN minstens 1 beschikbaar is
         return totalDrivers > 0 && availableDrivers > 0;
       };
       
@@ -949,69 +965,47 @@
         const capacityInfo = capacityCache[dateStr];
         let isAvailable = false;
         let blockedReason = '';
-        let onSelect = null;
+        let onSelectHalf = null;
+        let regionIdSel = null;
+        let regionNameSel = null;
+        let deliveryCountSel = 0;
+        let maxDeliveriesSel = 13;
         
         // 1) Regio-specifieke data (uit suggesties / adres)
-        if (dayData && dayData.spots_left !== undefined) {
-          const driversOk = hasDriversAvailable(dayData);
-          const maxDeliveries = dayData.max_deliveries || 13;
-          if (dayData.spots_left <= 0) {
-            blockedReason = `Regio vol (${maxDeliveries} leveringen)`;
-          } else if (!driversOk) {
-            blockedReason = 'Geen chauffeurs beschikbaar';
+        // Gebruik vereenvoudigde status: als capacityInfo bestaat en spots_left >0, markeer beschikbaar
+        const info = calendarData[dateStr] || capacityCache[dateStr] || {};
+        const driversOk = hasDriversAvailable(info);
+        const maxDeliveries = info.max_deliveries || 13;
+        const deliveryCount = info.delivery_count || 0;
+        const spotsLeft = (info.spots_left !== undefined) ? info.spots_left : (maxDeliveries - deliveryCount);
+        maxDeliveriesSel = maxDeliveries;
+
+        const markSlots = (available) => {
+          if (available) {
+            amSlot.classList.add('available');
+            pmSlot.classList.add('available');
+            amSlot.onclick = (e) => { e.stopPropagation(); selectDate(dateStr, 'am', false, spotsLeft); };
+            pmSlot.onclick = (e) => { e.stopPropagation(); selectDate(dateStr, 'pm', false, spotsLeft); };
+            amSlot.title = 'Klik voor voormiddag';
+            pmSlot.title = 'Klik voor namiddag';
           } else {
-            isAvailable = true;
-            onSelect = () => selectDate(dateStr, dayData.region_id, dayData.region_name, dayData.count, maxDeliveries);
+            amSlot.classList.add('blocked');
+            pmSlot.classList.add('blocked');
+            amSlot.onclick = null;
+            pmSlot.onclick = null;
           }
-        }
-        // 2) Algemene capaciteit (chauffeurs/trucks) indien geen regio-data
-        else if (capacityInfo !== undefined && capacityInfo !== null) {
-          const driversOk = hasDriversAvailable(capacityInfo);
-          // Gebruik default max leveringen (13) als er geen regio-specifieke data is
-          const defaultMaxDeliveries = 13;
-          const underLimit = (capacityInfo.total_deliveries || 0) < defaultMaxDeliveries;
-          if (driversOk && underLimit) {
-            isAvailable = true;
-            onSelect = () => selectDate(dateStr, null, null, 0, defaultMaxDeliveries);
-          } else {
-            if (!driversOk) {
-              blockedReason = 'Geen chauffeurs beschikbaar';
-            } else if (!underLimit) {
-              blockedReason = `Regio vol (${defaultMaxDeliveries} leveringen)`;
-            } else {
-              blockedReason = capacityInfo.reason || 'Geen capaciteit';
-            }
-          }
-        }
-        // 3) Gebufferde capaciteit in calendarData (indien al gecheckt)
-        else if (dayData && dayData.capacity_checked !== undefined) {
-          const driversOk = hasDriversAvailable(dayData);
-          const maxDeliveries = dayData.max_deliveries || 13;
-          if (dayData.is_available && driversOk) {
-            isAvailable = true;
-            onSelect = () => selectDate(dateStr, null, null, 0, maxDeliveries);
-          } else {
-            blockedReason = dayData.reason || (!driversOk ? 'Geen chauffeurs beschikbaar' : 'Geen capaciteit');
-          }
-        }
-        // 4) Geen data: NIET standaard beschikbaar - eerst checken of er chauffeurs zijn
-        else {
-          // Standaard NIET beschikbaar totdat we weten dat er chauffeurs zijn
-          isAvailable = false;
-          blockedReason = 'Controleren beschikbaarheid...';
-          // Check asynchroon de capaciteit
-          checkDayCapacity(dateStr, dayCell);
-        }
-        
-        if (isAvailable) {
-          dayCell.classList.add('available');
-          if (onSelect) dayCell.onclick = onSelect;
+        };
+
+        if (spotsLeft <= 0) {
+          blockedReason = `Regio vol (${maxDeliveries} leveringen)`;
+          markSlots(false);
+        } else if (!driversOk) {
+          blockedReason = 'Geen chauffeurs beschikbaar';
+          markSlots(false);
         } else {
-          dayCell.classList.add('blocked');
-          if (blockedReason) {
-            dayCell.title = blockedReason;
-          }
-          dayCell.onclick = null;
+          markSlots(true);
+          if (selectedHalfDay === 'am' && selectedCalendarDate === dateStr) amSlot.classList.add('selected');
+          if (selectedHalfDay === 'pm' && selectedCalendarDate === dateStr) pmSlot.classList.add('selected');
         }
       }
       

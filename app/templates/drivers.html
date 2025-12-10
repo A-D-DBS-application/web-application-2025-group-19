@@ -36,14 +36,14 @@
           <label class="form-label">Categorie</label>
           <select name="role" class="form-select">
             <option value="driver" selected>Chauffeur</option>
-            <option value="helper">Helper (grote levering)</option>
+            <option value="helper">Helper</option>
           </select>
         </div>
       </div>
       
       <!-- Beschikbaarheidskalender -->
       <div class="form-group mt-4">
-        <label class="form-label">Beschikbaarheidsdatums</label>
+        <label class="form-label">Beschikbaarheidsdatums (klik boven voor voormiddag, onder voor namiddag)</label>
         <div class="card availability-calendar-card" style="margin-top: 0.5rem;">
           <div class="card-body">
             <div class="availability-calendar-grid">
@@ -59,7 +59,7 @@
                   <div class="text-center text-xs font-medium text-muted" style="padding: 6px 0;">Za</div>
                   <div class="text-center text-xs font-medium text-muted" style="padding: 6px 0;">Zo</div>
                 </div>
-                <div id="month1-days" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px;"></div>
+                <div id="month1-days" class="calendar-grid-split"></div>
               </div>
               
               <!-- Maand 2 -->
@@ -74,7 +74,7 @@
                   <div class="text-center text-xs font-medium text-muted" style="padding: 6px 0;">Za</div>
                   <div class="text-center text-xs font-medium text-muted" style="padding: 6px 0;">Zo</div>
                 </div>
-                <div id="month2-days" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px;"></div>
+                <div id="month2-days" class="calendar-grid-split"></div>
               </div>
             </div>
             
@@ -222,8 +222,8 @@
       <svg class="empty-state-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1">
         <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
       </svg>
-      <p class="empty-state-title">Er zijn nog geen chauffeurs geregistreerd.</p>
-      <p class="empty-state-text">Voeg een chauffeur toe via het formulier hierboven.</p>
+      <p class="empty-state-title">Er zijn nog geen bezorgers geregistreerd.</p>
+      <p class="empty-state-text">Voeg een chauffeur of helper toe via het formulier hierboven.</p>
     </div>
   {% endif %}
 </div>
@@ -244,65 +244,57 @@
 </script>
 
 <style>
+  /* Split calendar cells (AM/PM) */
+  .calendar-grid-split {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+  }
   .calendar-day {
-    aspect-ratio: 1;
+    display: grid;
+    grid-template-rows: 1.2fr 1fr;
+    background: rgba(0, 0, 0, 0.02);
+    border-radius: 8px;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    min-height: 84px;
+  }
+  .calendar-day.empty {
+    background: transparent;
+    border: none;
+  }
+  .calendar-day.past {
+    background: rgba(0, 0, 0, 0.03);
+    color: rgba(0, 0, 0, 0.35);
+  }
+  .calendar-day .day-number {
+    font-weight: 600;
+    color: var(--color-black);
+    padding: 6px 6px 4px 6px;
+  }
+  .slots {
+    display: grid;
+    grid-template-rows: 1fr 1fr;
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+  }
+  .half-slot {
+    padding: 6px 4px;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 6px;
-    font-size: 0.8125rem;
+    font-size: 0.85rem;
     cursor: pointer;
-    transition: all 0.15s ease;
-    position: relative;
+    background: rgba(0, 0, 0, 0.02);
+  }
+  .half-slot.disabled {
     background: rgba(0, 0, 0, 0.03);
-    color: var(--color-dark-gray);
-  }
-  
-  .calendar-day:hover:not(.disabled):not(.empty):not(.past) {
-    transform: scale(1.08);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  }
-  
-  .calendar-day.empty {
-    background: transparent;
-    cursor: default;
-  }
-  
-  .calendar-day.past {
-    background: rgba(0, 0, 0, 0.05);
-    color: rgba(0, 0, 0, 0.25);
+    color: rgba(0, 0, 0, 0.35);
     cursor: not-allowed;
   }
-  
-  /* Groen - Beschikbaar / Selecteerbaar */
-  .calendar-day.available {
-    background: rgba(16, 185, 129, 0.15);
-    color: #065F46;
-    font-weight: 500;
-  }
-  
-  .calendar-day.available:hover {
-    background: #10B981;
-    color: white;
-  }
-  
-  .calendar-day.today {
-    border: 2px solid var(--color-navy);
-    font-weight: 600;
-  }
-  
-  /* Geselecteerde dag - Donkerder Groen */
-  .calendar-day.selected {
+  .half-slot.selected {
     background: #10B981 !important;
     color: white !important;
     font-weight: 600;
-    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
   }
-  
-  .calendar-day.selected:hover {
-    background: #059669 !important;
-  }
-
   /* Responsive grid similar to Nieuwe Levering planner */
   .availability-calendar-grid {
     display: grid;
@@ -323,7 +315,7 @@
 </style>
 
 <script>
-  let selectedDates = new Set(); // Set voor unieke datums
+  let selectedSlots = new Set(); // unieke combinaties date|half
   const monthNames = ['Januari', 'Februari', 'Maart', 'April', 'Mei', 'Juni', 
                       'Juli', 'Augustus', 'September', 'Oktober', 'November', 'December'];
 
@@ -388,46 +380,57 @@
       const dateStr = formatDateString(year, month, day);
       const isPast = dateObj < today;
       const isToday = dateObj.getTime() === today.getTime();
-      const isSelected = selectedDates.has(dateStr);
       
       const dayCell = document.createElement('div');
       dayCell.className = 'calendar-day';
-      dayCell.textContent = day;
-      dayCell.dataset.date = dateStr;
-      
+      const slots = document.createElement('div');
+      slots.className = 'slots';
+      const amSlot = document.createElement('div');
+      amSlot.className = 'half-slot am-slot';
+      amSlot.innerHTML = `<span class="day-num">${day}</span><span class="slot-label">VM</span>`;
+      const pmSlot = document.createElement('div');
+      pmSlot.className = 'half-slot pm-slot';
+      pmSlot.innerHTML = `<span class="slot-label">NM</span>`;
+
       if (isPast) {
         dayCell.classList.add('past');
+        amSlot.classList.add('disabled');
+        pmSlot.classList.add('disabled');
       } else {
-        dayCell.classList.add('available');
-        dayCell.onclick = () => toggleDate(dateStr);
+        const keyAm = `${dateStr}|am`;
+        const keyPm = `${dateStr}|pm`;
+        if (selectedSlots.has(keyAm)) amSlot.classList.add('selected');
+        if (selectedSlots.has(keyPm)) pmSlot.classList.add('selected');
+        amSlot.onclick = (e) => { e.stopPropagation(); toggleSlot(dateStr, 'am'); };
+        pmSlot.onclick = (e) => { e.stopPropagation(); toggleSlot(dateStr, 'pm'); };
       }
-      
+
       if (isToday) {
         dayCell.classList.add('today');
       }
-      
-      if (isSelected) {
-        dayCell.classList.add('selected');
-      }
-      
+
+      slots.appendChild(amSlot);
+      slots.appendChild(pmSlot);
+      dayCell.appendChild(slots);
       daysContainer.appendChild(dayCell);
     }
   }
 
-  function toggleDate(dateStr) {
-    if (selectedDates.has(dateStr)) {
-      selectedDates.delete(dateStr);
+  function toggleSlot(dateStr, half) {
+    const key = `${dateStr}|${half}`;
+    if (selectedSlots.has(key)) {
+      selectedSlots.delete(key);
     } else {
-      selectedDates.add(dateStr);
+      selectedSlots.add(key);
     }
-    renderCalendar(); // Re-render om selectie te updaten
+    renderCalendar();
     updateSelectedDatesInput();
   }
 
   function updateSelectedDatesInput() {
-    // Update hidden input met alle geselecteerde datums (comma-separated)
-    const sortedDates = Array.from(selectedDates).sort();
-    document.getElementById('selected-dates-input').value = sortedDates.join(',');
+    // Update hidden input met alle geselecteerde datums|half (comma-separated)
+    const sorted = Array.from(selectedSlots).sort();
+    document.getElementById('selected-dates-input').value = sorted.join(',');
   }
 </script>
 {% endblock %}

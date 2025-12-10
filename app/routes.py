@@ -8,7 +8,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, sessio
 from .models import (
     db, Tenant, Region, Location, Employee, Availability, Customer, Product,
     CustomerOrder, OrderItem, DeliveryRun, Delivery, DeliveryStatus, RegionAddress, Truck, TruckType,
-    EmployeeRole, RunStatus, set_employee_availability, get_available_drivers, add_order,
+    EmployeeRole, RunStatus, HalfDay, set_employee_availability, get_available_drivers, add_order,
     upsert_run_and_attach_delivery_with_capacity, get_delivery_overview, suggest_delivery_days,
     find_matching_regions, get_suggested_dates_for_address, add_address_to_region,
     create_new_region_with_address, count_deliveries_for_region_date, haversine_distance,
@@ -17,6 +17,42 @@ from .models import (
 )
 from sqlalchemy import text
 
+# ---- Lightweight safety migration for half_day columns (SQLite only) ----
+_halfday_checked = False
+
+
+def ensure_half_day_columns():
+    """
+    Ensures half_day columns exist on SQLite. For Postgres run a proper migration.
+    """
+    global _halfday_checked
+    if _halfday_checked:
+        return
+    try:
+        engine = db.engine
+        if engine.dialect.name != "sqlite":
+            current_app.logger.info("Half-day columns: skipping auto-migrate (non-sqlite). Run DB migration manually.")
+            _halfday_checked = True
+            return
+
+        def has_column(table, column):
+            res = engine.execute(text(f"PRAGMA table_info('{table}')")).fetchall()
+            return any(row[1] == column for row in res)
+
+        tables = ["availability", "delivery_run", "region_address"]
+        for tbl in tables:
+            if not has_column(tbl, "half_day"):
+                engine.execute(text(f"ALTER TABLE {tbl} ADD COLUMN half_day TEXT DEFAULT 'am'"))
+                engine.execute(text(f"UPDATE {tbl} SET half_day = 'am' WHERE half_day IS NULL"))
+                current_app.logger.info(f"Half-day column added to {tbl}")
+        _halfday_checked = True
+    except Exception as e:
+        try:
+            current_app.logger.exception(f"Auto-migrate half_day columns failed: {e}")
+        except Exception:
+            pass
+        _halfday_checked = True
+
 # Mapbox API configuratie - wordt uit config geladen
 def get_mapbox_token():
     """Haal Mapbox token uit Flask config of environment."""
@@ -24,7 +60,7 @@ def get_mapbox_token():
     return current_app.config.get("MAPBOX_ACCESS_TOKEN") or os.getenv(
         "MAPBOX_ACCESS_TOKEN", 
         "pk.eyJ1IjoibTFjaGFlbHYiLCJhIjoiY21pbmxsaGU4MDYzcTNkc2FyeTlkNzV1YiJ9.YVfQAyc5-VD11S3w2ACJAw"
-    )
+)
 
 main = Blueprint("main", __name__)
 
@@ -59,6 +95,9 @@ def index():
     # Als gebruiker niet is ingelogd -> stuur naar login pagina
     if "employee_id" not in session:
         return redirect(url_for("main.login"))
+    
+    # Ensure half-day columns exist (sqlite safety)
+    ensure_half_day_columns()
 
     username = session.get("username")
     tid = tenant_id()
@@ -88,7 +127,7 @@ def index():
         # 2. Chauffeurs: totaal actief en actief vandaag
         drivers_total = db.session.query(db.func.count(Employee.employee_id)).filter(
             Employee.tenant_id == tid,
-            Employee.role == EmployeeRole.driver,
+            Employee.role.in_([EmployeeRole.driver, EmployeeRole.helper]),
             Employee.active.is_(True)
         ).scalar() or 0
 
@@ -98,7 +137,7 @@ def index():
             (Employee.tenant_id == Availability.tenant_id)
         ).filter(
             Employee.tenant_id == tid,
-            Employee.role == EmployeeRole.driver,
+            Employee.role.in_([EmployeeRole.driver, EmployeeRole.helper]),
             Employee.active.is_(True),
             Availability.active.is_(True),
             Availability.available_date == today
@@ -182,7 +221,8 @@ def index():
             RegionAddress,
             (DeliveryRun.tenant_id == RegionAddress.tenant_id) & 
             (DeliveryRun.region_id == RegionAddress.region_id) &
-            (DeliveryRun.scheduled_date == RegionAddress.scheduled_date)
+            (DeliveryRun.scheduled_date == RegionAddress.scheduled_date) &
+            (DeliveryRun.half_day == RegionAddress.half_day)
         ).filter(
             Delivery.tenant_id == tid,
             Delivery.delivery_status == 'scheduled',
@@ -228,11 +268,11 @@ def index():
             if unique_key not in seen_combinations:
                 seen_combinations.add(unique_key)
                 unique_deliveries.append({
-                    "delivery_id": d_id,
-                    "order_id": o_id,
+                "delivery_id": d_id,
+                "order_id": o_id,
                     "municipality": municipality,
                     "scheduled_date": sched_date,
-                    "delivery_status": str(status).split('.')[-1] if status else 'unknown'
+                "delivery_status": str(status).split('.')[-1] if status else 'unknown'
                 })
         
         upcoming_deliveries = unique_deliveries
@@ -506,7 +546,7 @@ def availability():
         flash("Ongeldige datum (YYYY-MM-DD).", "error")
         return redirect(url_for("main.index"))
 
-    set_employee_availability(tenant_id(), session["employee_id"], available_date, active=(active_str == "true"))
+    set_employee_availability(tenant_id(), session["employee_id"], available_date, HalfDay.am, active=(active_str == "true"))
     flash(f"Beschikbaarheid ingesteld voor {available_date}.", "success")
     return redirect(url_for("main.index"))
 
@@ -522,6 +562,8 @@ def add_driver():
     email = request.form.get("email", "").strip().lower()
     role_choice = (request.form.get("role", "driver") or "driver").strip().lower()
     availability_dates_str = request.form.get("availability_dates", "").strip()
+    availability_half_day_choice = (request.form.get("availability_half_day", "am") or "am").strip().lower()
+    availability_half_day = HalfDay.pm if availability_half_day_choice == "pm" else HalfDay.am
 
     if not first or not last or not email:
         flash("Vul voornaam, achternaam en e-mail in.", "error")
@@ -629,7 +671,7 @@ def add_driver():
             try:
                 # Check if availability already exists
                 existing = Availability.query.filter_by(
-                    tenant_id=tid, employee_id=employee_id_val, available_date=availability_date
+                    tenant_id=tid, employee_id=employee_id_val, available_date=availability_date, half_day=availability_half_day
                 ).first()
                 
                 if existing:
@@ -644,7 +686,8 @@ def add_driver():
                         tenant_id=tid, 
                         availability_id=availability_id, 
                         employee_id=employee_id_val,
-                        available_date=availability_date, 
+                        available_date=availability_date,
+                        half_day=availability_half_day,
                         active=True
                     )
                     db.session.add(av)
@@ -700,12 +743,15 @@ def schedule():
         flash("Log in om leveringen te plannen.", "error")
         return redirect(url_for("main.login"))
 
+    ensure_half_day_columns()
     tid = tenant_id()
     product_description = request.form.get("product_description", "").strip()
     address = request.form.get("address")
     region_name = request.form.get("region_id")  # Municipality name (optional)
     municipality = request.form.get("municipality", "").strip()  # Gemeente (optioneel, wordt uit adres gehaald indien niet opgegeven)
     scheduled_date_str = request.form.get("scheduled_date")
+    half_day_choice = (request.form.get("half_day", "am") or "am").strip().lower()
+    half_day = HalfDay.pm if half_day_choice == "pm" else HalfDay.am
     
     # Extract municipality from address if not provided
     if not municipality and address:
@@ -757,14 +803,14 @@ def schedule():
                 
                 if region:
                     # Check capaciteit (max leveringen per regio instelling)
-                    delivery_count = count_deliveries_for_region_date(tid, region_id, scheduled_date)
+                    delivery_count = count_deliveries_for_region_date(tid, region_id, scheduled_date, half_day)
                     max_deliveries = region.max_deliveries_per_day or 13
                     if delivery_count >= max_deliveries:
-                        flash(f"Deze regio heeft al {max_deliveries} leveringen op {scheduled_date.strftime('%d-%m-%Y')}. Kies een andere datum.", "error")
+                        flash(f"Deze regio heeft al {max_deliveries} leveringen op {scheduled_date.strftime('%d-%m-%Y')} ({half_day.value}). Kies een andere datum/halve dag.", "error")
                         return redirect(url_for("main.add_listing"))
                     
                     # Voeg adres toe aan regio en herbereken centrum
-                    add_address_to_region(tid, region_id, address, lat, lng, scheduled_date)
+                    add_address_to_region(tid, region_id, address, lat, lng, scheduled_date, half_day)
                     current_app.logger.info(f"Added address to existing region {region_id}")
             except (ValueError, TypeError):
                 pass
@@ -779,14 +825,14 @@ def schedule():
                 region_id = closest_region.region_id
                 
                 # Check capaciteit (max leveringen per regio instelling)
-                delivery_count = count_deliveries_for_region_date(tid, region_id, scheduled_date)
+                delivery_count = count_deliveries_for_region_date(tid, region_id, scheduled_date, half_day)
                 max_deliveries = closest_region.max_deliveries_per_day or 13
                 if delivery_count >= max_deliveries:
                     # Probeer de volgende dichtstbijzijnde regio
                     found_available = False
                     for match in matching_regions[1:]:
                         r = match["region"]
-                        count = count_deliveries_for_region_date(tid, r.region_id, scheduled_date)
+                        count = count_deliveries_for_region_date(tid, r.region_id, scheduled_date, half_day)
                         r_max = r.max_deliveries_per_day or 13
                         if count < r_max:
                             region_id = r.region_id
@@ -796,16 +842,16 @@ def schedule():
                     if not found_available:
                         # Alle regio's vol, maak nieuwe regio
                         region_name_new = municipality or region_name or f"Regio {scheduled_date.strftime('%d-%m-%Y')}"
-                        region_id, _ = create_new_region_with_address(tid, region_name_new, address, lat, lng, scheduled_date)
+                        region_id, _ = create_new_region_with_address(tid, region_name_new, address, lat, lng, scheduled_date, half_day)
                         current_app.logger.info(f"Created new region {region_id} (all nearby regions full)")
                 else:
                     # Voeg adres toe aan bestaande regio
-                    add_address_to_region(tid, region_id, address, lat, lng, scheduled_date)
+                    add_address_to_region(tid, region_id, address, lat, lng, scheduled_date, half_day)
                     current_app.logger.info(f"Added address to nearest region {region_id}")
             else:
                 # Geen bestaande regio binnen 30km, maak nieuwe regio
                 region_name_new = municipality or region_name or f"Regio {scheduled_date.strftime('%d-%m-%Y')}"
-                region_id, _ = create_new_region_with_address(tid, region_name_new, address, lat, lng, scheduled_date)
+                region_id, _ = create_new_region_with_address(tid, region_name_new, address, lat, lng, scheduled_date, half_day)
                 current_app.logger.info(f"Created new region {region_id} (no nearby regions)")
     
     # Fallback: oude logica als geen coördinaten beschikbaar
@@ -823,7 +869,7 @@ def schedule():
     # Kies een beschikbare driver (indien region_id gegeven)
     driver_id = None
     if region_id is not None:
-        drivers = get_available_drivers(tid, region_id, scheduled_date)
+        drivers = get_available_drivers(tid, region_id, scheduled_date, half_day)
         driver_id = drivers[0].employee_id if drivers else None
 
     # Always create a new order with the product description
@@ -839,7 +885,7 @@ def schedule():
                 db.session.add(default_region)
                 db.session.flush()
             region_id = default_region.region_id
-        
+
         # create demo customer/location if needed
         customer = Customer.query.filter_by(tenant_id=tid, email="demo@customer.local").first()
         if not customer:
@@ -883,7 +929,7 @@ def schedule():
 
     try:
         delivery_id = upsert_run_and_attach_delivery_with_capacity(
-            tid, order_id, region_id, driver_id, scheduled_date
+            tid, order_id, region_id, driver_id, scheduled_date, half_day
         )
         # Format date for user-facing message (dd-mm-YYYY)
         try:
@@ -1153,6 +1199,8 @@ def check_region_capacity():
     try:
         region_id = int(request.args.get("region_id", 0))
         date_str = request.args.get("date", "")
+        half_day_choice = (request.args.get("half_day", "am") or "am").strip().lower()
+        half_day = HalfDay.pm if half_day_choice == "pm" else HalfDay.am
         check_date = date.fromisoformat(date_str)
     except (ValueError, TypeError):
         return jsonify({"error": "Invalid parameters"}), 400
@@ -1165,11 +1213,12 @@ def check_region_capacity():
         return jsonify({"error": "Region not found"}), 404
     
     max_deliveries = region.max_deliveries_per_day or 13
-    delivery_count = count_deliveries_for_region_date(tid, region_id, check_date)
+    delivery_count = count_deliveries_for_region_date(tid, region_id, check_date, half_day)
     
     return jsonify({
         "region_id": region_id,
         "date": date_str,
+        "half_day": half_day.value,
         "delivery_count": delivery_count,
         "max_deliveries": max_deliveries,
         "spots_left": max_deliveries - delivery_count,
@@ -1277,6 +1326,7 @@ def drivers_list():
     if "employee_id" not in session:
         return redirect(url_for("main.login"))
     
+    ensure_half_day_columns()
     tid = tenant_id()
     today = date.today()
     
@@ -1300,8 +1350,8 @@ def drivers_list():
                 Availability.available_date >= today
             ).order_by(Availability.available_date.asc()).all()
             
-            # Format all available dates
-            available_dates = [av.available_date.strftime('%d-%m-%Y') for av in availabilities]
+            # Format all available dates (show half-day)
+            available_dates = [f"{av.available_date.strftime('%d-%m-%Y')} ({av.half_day.value.upper() if av.half_day else 'AM'})" for av in availabilities]
             
             # Check if available today - explicitly check if there's an availability record for today
             # Convert both to date objects to ensure correct comparison
