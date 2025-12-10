@@ -21,6 +21,7 @@
           <input type="hidden" name="lng" id="lng-input" value="">
           <input type="hidden" name="selected_region_id" id="selected-region-id" value="">
           <input type="hidden" name="region_id" id="region-input" value="">
+          <input type="hidden" name="municipality" id="municipality-input" value="">
 
           <div class="form-group">
             <label class="form-label">Adres</label>
@@ -441,13 +442,9 @@
     background: rgba(16, 185, 129, 0.15);
     color: #065F46;
     font-weight: 500;
-    -webkit-tap-highlight-color: rgba(16, 185, 129, 0.3);
-    touch-action: manipulation; /* Better touch response */
-    user-select: none; /* Prevent text selection on mobile */
   }
   
-  .calendar-day.available:hover,
-  .calendar-day.available:active {
+  .calendar-day.available:hover {
     background: #10B981;
     color: white;
   }
@@ -701,6 +698,7 @@
     document.getElementById('no-suggestions').classList.add('hidden');
   }
 
+<<<<<<< HEAD
   // Helper function to extract municipality from address
   function extractMunicipalityFromAddress(address) {
     if (!address) return '—';
@@ -747,6 +745,10 @@
           <div><p class="text-xs text-muted">Datum</p><p class="font-medium">${formatDate(dateStr)}</p></div>
           <div><p class="text-xs text-muted">Status</p><p class="font-medium badge badge-success" style="display: inline-block;">Beschikbaar</p></div>
         </div>
+        <div class="form-group mt-4">
+          <label class="form-label">Gemeente</label>
+          <input type="text" name="municipality" id="municipality-input-field" placeholder="Voer gemeente in" class="form-input" value="">
+        </div>
       `;
     } else {
       document.getElementById('selected-region-id').value = '';
@@ -759,10 +761,25 @@
           <div><p class="text-xs text-muted">Leveringen</p><p class="font-medium">0 van ${maxDeliveriesForRegion}</p></div>
           <div><p class="text-xs text-muted">Status</p><p class="font-medium badge badge-success" style="display: inline-block;">Beschikbaar</p></div>
         </div>
+        <div class="form-group mt-4">
+          <label class="form-label">Gemeente</label>
+          <input type="text" name="municipality" id="municipality-input-field" placeholder="Voer gemeente in" class="form-input" value="">
+        </div>
       `;
     }
     
     infoDiv.classList.remove('hidden');
+    
+    // Update hidden field when municipality input changes
+    setTimeout(() => {
+      const municipalityInput = document.getElementById('municipality-input-field');
+      if (municipalityInput) {
+        municipalityInput.addEventListener('input', function() {
+          document.getElementById('municipality-input').value = this.value;
+        });
+      }
+    }, 100);
+    
     renderCalendar();
   }
 
@@ -919,23 +936,13 @@
         
         if (isAvailable) {
           dayCell.classList.add('available');
-          if (onSelect) {
-            // Support both click and touch events for mobile
-            dayCell.onclick = onSelect;
-            dayCell.addEventListener('touchend', function(e) {
-              e.preventDefault();
-              e.stopPropagation();
-              onSelect();
-            }, { passive: false });
-          }
+          if (onSelect) dayCell.onclick = onSelect;
         } else {
           dayCell.classList.add('blocked');
           if (blockedReason) {
             dayCell.title = blockedReason;
           }
           dayCell.onclick = null;
-          // Remove any existing touch listeners
-          dayCell.replaceWith(dayCell.cloneNode(true));
         }
       }
       

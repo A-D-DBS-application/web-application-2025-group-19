@@ -210,13 +210,9 @@
     background: rgba(16, 185, 129, 0.15);
     color: #065F46;
     font-weight: 500;
-    -webkit-tap-highlight-color: rgba(16, 185, 129, 0.3);
-    touch-action: manipulation; /* Better touch response */
-    user-select: none; /* Prevent text selection on mobile */
   }
   
-  .calendar-day.available:hover,
-  .calendar-day.available:active {
+  .calendar-day.available:hover {
     background: #10B981;
     color: white;
   }
@@ -316,13 +312,7 @@
         dayCell.classList.add('past');
       } else {
         dayCell.classList.add('available');
-        // Support both click and touch events for mobile
         dayCell.onclick = () => toggleDate(dateStr);
-        dayCell.addEventListener('touchend', function(e) {
-          e.preventDefault();
-          e.stopPropagation();
-          toggleDate(dateStr);
-        }, { passive: false });
       }
       
       if (isToday) {
