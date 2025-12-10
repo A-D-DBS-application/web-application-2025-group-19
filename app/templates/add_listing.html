@@ -7,9 +7,9 @@
   <p class="page-subtitle">Plan een nieuwe levering door het formulier in te vullen.</p>
 </div>
 
-<div class="grid" style="grid-template-columns: 2fr 1fr; gap: 1.5rem;">
-  <!-- Formulier -->
-  <div>
+<div class="add-listing-grid">
+<!-- Formulier -->
+  <div class="add-listing-main">
     <div class="card mb-4">
       <div class="card-header">
         <h2 class="font-semibold">Leveringsgegevens</h2>
@@ -55,7 +55,7 @@
                 </div>
                 
                 <!-- Twee Maanden Grid -->
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+                <div class="calendar-grid">
                   <!-- Maand 1 -->
                   <div>
                     <h4 id="month1-label" class="font-medium text-center mb-3" style="color: var(--color-navy);"></h4>
@@ -119,7 +119,7 @@
   </div>
 
   <!-- Zijbalk -->
-  <div>
+  <div class="add-listing-side">
     <div class="card mb-4" id="region-settings-card">
       <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
         <h3 class="font-semibold">Regio Regels</h3>
@@ -133,16 +133,16 @@
       <div class="card-body">
         <!-- View Mode -->
         <div id="settings-view-mode" style="display: flex; flex-direction: column; gap: 0.75rem;">
-          <div class="flex items-center gap-2">
-            <span style="color: var(--color-navy, #1B263B);">•</span>
+          <div class="region-rule">
+            <span class="region-bullet">•</span>
             <span class="text-small"><strong>Straal:</strong> <span id="radius-display">30</span> km vanaf centrum</span>
           </div>
-          <div class="flex items-center gap-2">
-            <span style="color: var(--color-navy, #1B263B);">•</span>
+          <div class="region-rule">
+            <span class="region-bullet">•</span>
             <span class="text-small"><strong>Max leveringen:</strong> <span id="max-deliveries-display">13</span> per dag per regio</span>
           </div>
-          <div class="flex items-center gap-2">
-            <span style="color: var(--color-navy, #1B263B);">•</span>
+          <div class="region-rule">
+            <span class="region-bullet">•</span>
             <span class="text-small"><strong>Centrum:</strong> Wordt herberekend per nieuw adres</span>
           </div>
         </div>
@@ -195,6 +195,76 @@
 </div>
 
 <style>
+  /* Layout helper for add listing */
+  .add-listing-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  .add-listing-main {
+    order: 1;
+  }
+
+  .add-listing-side {
+    order: 2;
+  }
+
+  .calendar-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+  }
+
+  .add-listing-grid .card {
+    margin-bottom: var(--spacing-md);
+  }
+
+  /* Region rules bullets */
+  .region-rule {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .region-bullet {
+    color: var(--color-navy, #1B263B);
+    font-size: 1.05rem;
+    line-height: 1;
+    position: relative;
+    top: 2px;
+  }
+
+  @media (max-width: 768px) {
+    .add-listing-grid {
+      grid-template-columns: 1fr;
+      gap: var(--spacing-md);
+    }
+
+    .calendar-grid {
+      grid-template-columns: 1fr;
+      gap: var(--spacing-md);
+    }
+
+    #calendar-section .card-body {
+      padding: var(--spacing-md);
+    }
+
+    .add-listing-grid .card {
+      margin-bottom: var(--spacing-md);
+    }
+
+    /* Move region rules above on mobile */
+    .add-listing-side {
+      order: -1;
+    }
+
+    .add-listing-main {
+      order: 1;
+    }
+  }
+
   /* ========== SETTINGS STYLES ========== */
   .settings-label {
     display: flex;
@@ -283,6 +353,7 @@
   }
   
   .premium-number-input[type=number] {
+    appearance: textfield;
     -moz-appearance: textfield;
   }
   
