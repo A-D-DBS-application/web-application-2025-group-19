@@ -1361,7 +1361,6 @@ def drivers_list():
         current_app.logger.exception(f"Error fetching drivers: {e}")
         driver_list = []
     
-<<<<<<< HEAD
     # Get all drivers for co-driver dropdown (exclude current driver being edited if applicable)
     all_drivers_for_dropdown = db.session.query(Employee).filter(
         Employee.tenant_id == tid,
