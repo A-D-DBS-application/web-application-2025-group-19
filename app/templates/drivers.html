@@ -41,32 +41,6 @@
         </div>
       </div>
       
-      <!-- Bijchauffeur optie -->
-      <div class="form-group mt-4">
-        <label class="form-label">Heeft bijchauffeur?</label>
-        <div class="flex items-center gap-4">
-          <label class="flex items-center gap-2 cursor-pointer">
-            <input type="radio" name="has_co_driver" value="no" checked onchange="toggleCoDriverSelect(false)">
-            <span>Nee</span>
-          </label>
-          <label class="flex items-center gap-2 cursor-pointer">
-            <input type="radio" name="has_co_driver" value="yes" onchange="toggleCoDriverSelect(true)">
-            <span>Ja</span>
-          </label>
-        </div>
-        <div id="co-driver-select-container" class="mt-3 hidden">
-          <label class="form-label">Selecteer bijchauffeur</label>
-          <select name="co_driver_id" id="co-driver-select" class="form-input">
-            <option value="">-- Kies een bijchauffeur --</option>
-            {% if all_drivers %}
-              {% for driver in all_drivers %}
-                <option value="{{ driver.employee_id }}">{{ driver.name or (driver.first_name + ' ' + driver.last_name) }}</option>
-              {% endfor %}
-            {% endif %}
-          </select>
-        </div>
-      </div>
-      
       <!-- Beschikbaarheidskalender -->
       <div class="form-group mt-4">
         <label class="form-label">Beschikbaarheidsdatums (klik boven voor voormiddag, onder voor namiddag)</label>
@@ -107,22 +81,6 @@
             <p id="calendar-hint" class="text-xs text-muted mt-4" style="text-align: center;">
               Klik op dagen om ze te selecteren als beschikbaarheidsdatums. Geselecteerde dagen worden groen weergegeven.
             </p>
-            
-            <!-- Time slot checkboxes (shown when a day is selected) -->
-            <div id="time-slots-container" class="mt-4 hidden">
-              <label class="form-label" id="time-slots-label">Tijdsblokken voor geselecteerde dag</label>
-              <div class="flex flex-col gap-3 mt-2">
-                <label class="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" id="morning-slot" class="form-checkbox">
-                  <span>Voormiddag (8:00–12:00)</span>
-                </label>
-                <label class="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" id="afternoon-slot" class="form-checkbox">
-                  <span>Namiddag (13:00–16:00)</span>
-                </label>
-              </div>
-              <p class="text-xs text-muted mt-2">Je kunt één of beide tijdsblokken selecteren.</p>
-            </div>
             
             <!-- Hidden input voor geselecteerde datums -->
             <input type="hidden" id="selected-dates-input" name="availability_dates" value="">
@@ -165,26 +123,16 @@
       <tbody>
         {% for driver in drivers %}
           <tr>
-<<<<<<< HEAD
-            <td>
-              <div class="flex items-center gap-2">
-                <div style="width: 32px; height: 32px; border-radius: 50%; background: var(--color-navy); color: white; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 600;">
-                  {% if driver.name and driver.name|length > 0 %}{{ driver.name[0] | upper }}{% else %}{{ driver.first_name[0] | upper if driver.first_name else '?' }}{% endif %}
-                </div>
-                <span class="font-medium">{{ driver.name or (driver.first_name + ' ' + driver.last_name) }}</span>
-                {% set role_val = driver.role.value if driver.role is defined and driver.role is not string else driver.role %}
-                <div class="role-badge-wrap" style="display: inline-flex; align-items: center; gap: 0.5rem; margin-left: 0.5rem;">
-                  {% if role_val == 'helper' %}
-                    <span class="badge badge-default role-badge">Helper</span>
-                  {% else %}
-                    <span class="badge badge-default role-badge">Chauffeur</span>
-                  {% endif %}
-                  {% if driver.has_co_driver %}
-                    <span class="badge" style="background: rgba(251, 146, 60, 0.15); color: #9A3412; font-size: 0.7rem;" title="Heeft bijchauffeur: {{ driver.co_driver_name or 'Onbekend' }}">
-                      👥
-                    </span>
-                  {% endif %}
-                </div>
+            <td class="name-col">
+              <span class="font-medium">{{ driver.name or (driver.first_name + ' ' + driver.last_name) }}</span>
+              {% set role_val = driver.role.value if driver.role is defined and driver.role is not string else driver.role %}
+              <div class="role-badge-wrap">
+                {% if role_val == 'helper' %}
+                  <span class="badge badge-default role-badge">Helper</span>
+                {% else %}
+                  <span class="badge badge-default role-badge">Chauffeur</span>
+                {% endif %}
+              </div>
             </td>
             <td>{{ driver.email or '—' }}</td>
             <td>
@@ -221,19 +169,11 @@
             <div class="table-mobile-label">Naam</div>
             <div class="table-mobile-value font-medium">
               {{ driver.name or (driver.first_name + ' ' + driver.last_name) }}
-              {% set role_val = driver.role.value if driver.role is defined and driver.role is not string else driver.role %}
-              <div style="display: inline-flex; align-items: center; gap: 0.5rem; margin-left: 0.5rem;">
-                {% if role_val == 'helper' %}
-                  <span class="badge badge-default">Helper</span>
-                {% else %}
-                  <span class="badge badge-default">Chauffeur</span>
-                {% endif %}
-                {% if driver.has_co_driver %}
-                  <span class="badge" style="background: rgba(251, 146, 60, 0.15); color: #9A3412; font-size: 0.7rem;" title="Heeft bijchauffeur: {{ driver.co_driver_name or 'Onbekend' }}">
-                    👥
-                  </span>
-                {% endif %}
-              </div>
+              {% if driver.role == 'helper' or (driver.role and driver.role.value == 'helper') %}
+                <span class="badge badge-default" style="margin-left: 6px;">Helper</span>
+              {% else %}
+                <span class="badge badge-default" style="margin-left: 6px;">Chauffeur</span>
+              {% endif %}
             </div>
           </div>
           <div class="table-mobile-row">
@@ -289,20 +229,6 @@
 </div>
 
 <script>
-  // Toggle bijchauffeur select dropdown
-  function toggleCoDriverSelect(show) {
-    const container = document.getElementById('co-driver-select-container');
-    const select = document.getElementById('co-driver-select');
-    if (show) {
-      container.classList.remove('hidden');
-      select.required = true;
-    } else {
-      container.classList.add('hidden');
-      select.required = false;
-      select.value = '';
-    }
-  }
-
   // Show mobile view on mobile devices (match geplande leveringen gedrag)
   if (window.innerWidth <= 768) {
     const tableContainers = document.querySelectorAll('.table-container');
@@ -389,15 +315,8 @@
 </style>
 
 <script>
-<<<<<<< HEAD
   let selectedSlots = new Set(); // unieke combinaties date|half
   const monthNames = ['Januari', 'Februari', 'Maart', 'April', 'Mei', 'Juni', 
-=======
-  let selectedDates = new Set(); // Set voor unieke datums
-  let dateTimeSlots = {}; // Store time slots per date: { "2024-01-15": { morning: true, afternoon: false } }
-  let currentSelectedDate = null; // Track which date is currently being configured
-  const monthNames = ['Januari', 'Februari', 'Maart', 'April', 'Mei', 'Juni',
->>>>>>> 3751afb91f188f0156cc145402a0a469d634d3c0
                       'Juli', 'Augustus', 'September', 'Oktober', 'November', 'December'];
 
   document.addEventListener('DOMContentLoaded', function() {
@@ -497,89 +416,21 @@
     }
   }
 
-<<<<<<< HEAD
   function toggleSlot(dateStr, half) {
     const key = `${dateStr}|${half}`;
     if (selectedSlots.has(key)) {
       selectedSlots.delete(key);
     } else {
       selectedSlots.add(key);
-=======
-  function toggleDate(dateStr) {
-    if (selectedDates.has(dateStr)) {
-      // If already selected, show time slots for this date
-      currentSelectedDate = dateStr;
-      showTimeSlotsForDate(dateStr);
-    } else {
-      // Add to selection and show time slots
-      selectedDates.add(dateStr);
-      currentSelectedDate = dateStr;
-      showTimeSlotsForDate(dateStr);
->>>>>>> 3751afb91f188f0156cc145402a0a469d634d3c0
     }
     renderCalendar();
     updateSelectedDatesInput();
   }
 
-  function showTimeSlotsForDate(dateStr) {
-    const container = document.getElementById('time-slots-container');
-    const morningCheckbox = document.getElementById('morning-slot');
-    const afternoonCheckbox = document.getElementById('afternoon-slot');
-    
-    // Load existing time slots for this date if any
-    if (dateTimeSlots[dateStr]) {
-      morningCheckbox.checked = dateTimeSlots[dateStr].morning || false;
-      afternoonCheckbox.checked = dateTimeSlots[dateStr].afternoon || false;
-    } else {
-      // Default: both unchecked
-      morningCheckbox.checked = false;
-      afternoonCheckbox.checked = false;
-    }
-    
-    // Show container
-    container.classList.remove('hidden');
-    
-    // Update label to show selected date
-    const label = container.querySelector('.form-label');
-    const dateObj = new Date(dateStr + 'T00:00:00');
-    const formattedDate = dateObj.toLocaleDateString('nl-BE', { weekday: 'short', day: '2-digit', month: 'short' });
-    label.textContent = `Tijdsblokken voor ${formattedDate}`;
-    
-    // Add event listeners to save time slots when checkboxes change
-    morningCheckbox.onchange = () => saveTimeSlotsForDate(dateStr);
-    afternoonCheckbox.onchange = () => saveTimeSlotsForDate(dateStr);
-  }
-
-  function saveTimeSlotsForDate(dateStr) {
-    const morningCheckbox = document.getElementById('morning-slot');
-    const afternoonCheckbox = document.getElementById('afternoon-slot');
-    
-    dateTimeSlots[dateStr] = {
-      morning: morningCheckbox.checked,
-      afternoon: afternoonCheckbox.checked
-    };
-    
-    // Update hidden input with date and time slots info
-    updateSelectedDatesInput();
-  }
-
   function updateSelectedDatesInput() {
-<<<<<<< HEAD
     // Update hidden input met alle geselecteerde datums|half (comma-separated)
     const sorted = Array.from(selectedSlots).sort();
     document.getElementById('selected-dates-input').value = sorted.join(',');
-=======
-    // Format: "2024-01-15:morning,afternoon|2024-01-16:morning"
-    const formattedDates = Array.from(selectedDates).sort().map(dateStr => {
-      const slots = dateTimeSlots[dateStr] || { morning: false, afternoon: false };
-      const slotParts = [];
-      if (slots.morning) slotParts.push('morning');
-      if (slots.afternoon) slotParts.push('afternoon');
-      const slotStr = slotParts.length > 0 ? ':' + slotParts.join(',') : '';
-      return dateStr + slotStr;
-    });
-    document.getElementById('selected-dates-input').value = formattedDates.join('|');
->>>>>>> 3751afb91f188f0156cc145402a0a469d634d3c0
   }
 </script>
 {% endblock %}
