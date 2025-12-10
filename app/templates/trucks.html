@@ -87,13 +87,8 @@
       <tbody>
         {% for truck in trucks %}
           <tr>
-            <td>
-              <div class="flex items-center gap-2">
-                {% if truck.color and truck.color != '-' %}
-                  <span style="width: 12px; height: 12px; border-radius: 50%; background: {{ truck.color.lower() }}; border: 1px solid rgba(0,0,0,0.1);"></span>
-                {% endif %}
-                <span class="font-medium">{{ truck.name }}</span>
-              </div>
+            <td class="name-col">
+              <span class="font-medium">{{ truck.name }}</span>
             </td>
             <td>
               <span class="badge badge-default">{{ truck.truck_type }}</span>

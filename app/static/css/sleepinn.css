@@ -536,7 +536,8 @@ textarea.form-input {
 
 /* Hide desktop 'Acties' header text (keep column width) */
 .actions-col {
-  width: 110px;
+  width: 120px;
+  text-align: center;
 }
 
 @media (max-width: 768px) {
@@ -641,6 +642,23 @@ textarea.form-input {
   font-size: 0.75rem;
   font-weight: 500;
   border-radius: var(--radius-sm);
+}
+
+/* Align role badges vertically in tables on desktop */
+.role-badge {
+  display: inline-flex;
+  margin-top: 4px;
+  margin-left: 8px;
+}
+
+.role-badge-wrap {
+  display: block;
+  width: 100%;
+  text-align: left;
+}
+
+.name-col {
+  min-width: 180px;
 }
 
 .badge-default {
