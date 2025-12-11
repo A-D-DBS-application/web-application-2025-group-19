@@ -194,25 +194,36 @@ def index():
         ).order_by(DeliveryRun.scheduled_date.asc()).limit(50).all()  # Get more to filter unique
         
         # Convert to dict format for template
-        # Extract municipality from address (e.g., "Legeweg 12, 8340 Damme, West-Vlaanderen, België" -> "Damme")
-        def extract_municipality(address_str):
+        # Extract street and municipality from address (e.g., "Bontestraat 57, 9620 Zottegem, Oost-Vlaanderen, België" -> ("Bontestraat 57", "Zottegem"))
+        def extract_street_and_city(address_str, customer_municipality=None):
             if not address_str:
-                return 'N/A'
-            # Try to extract municipality from address string
+                return 'N/A', customer_municipality or 'N/A'
+            
             # Format is usually: "Street, PostalCode Municipality, Province, Country"
             parts = address_str.split(',')
-            if len(parts) >= 2:
+            
+            # Extract street (first part)
+            street = parts[0].strip() if len(parts) > 0 else ''
+            
+            # Extract municipality
+            municipality = customer_municipality
+            if not municipality and len(parts) >= 2:
                 # Get the part with postal code and municipality (usually second part)
-                # Format: "8340 Damme" -> extract "Damme"
-                municipality_part = parts[1].strip() if len(parts) > 1 else parts[-1].strip()
+                # Format: "9620 Zottegem" -> extract "Zottegem"
+                municipality_part = parts[1].strip()
                 # Split by space and get the last word (municipality, skipping postal code)
                 words = municipality_part.split()
                 if len(words) >= 2:
                     # Skip postal code, get municipality
-                    return words[-1]
+                    municipality = words[-1]
                 elif len(words) == 1:
-                    return words[0]
-            return address_str.split(',')[-1].strip() if ',' in address_str else address_str
+                    municipality = words[0]
+            
+            if not municipality:
+                # Fallback: use last part or whole address
+                municipality = parts[-1].strip() if len(parts) > 1 else address_str.strip()
+            
+            return street, municipality
         
         today = date.today()
         seen_combinations = set()
@@ -222,12 +233,22 @@ def index():
             # Only show future deliveries
             if sched_date and sched_date < today:
                 continue
-                
-            # Use municipality from Customer first, then from address, then from region name
-            municipality = customer_municipality if customer_municipality else (extract_municipality(address) if address else (region_name or 'N/A'))
             
-            # Create unique key: municipality + date
-            unique_key = (municipality, sched_date)
+            # Extract street and city from address
+            street, city = extract_street_and_city(address, customer_municipality)
+            
+            # If no address, fallback to region name for city
+            if not street or street == 'N/A':
+                city = customer_municipality or region_name or 'N/A'
+            
+            # Format as "Street, City" or just "City" if no street
+            if street and street != 'N/A':
+                display_address = f"{street}, {city}"
+            else:
+                display_address = city
+            
+            # Create unique key: display_address + date
+            unique_key = (display_address, sched_date)
             
             # Only add if we haven't seen this combination before
             if unique_key not in seen_combinations:
@@ -235,7 +256,7 @@ def index():
                 unique_deliveries.append({
                     "delivery_id": d_id,
                     "order_id": o_id,
-                    "municipality": municipality,
+                    "municipality": display_address,  # Now contains "Street, City" format
                     "scheduled_date": sched_date,
                     "delivery_status": str(status).split('.')[-1] if status else 'unknown'
                 })
@@ -269,11 +290,43 @@ def listings():
     try:
         tid = tenant_id()
         rows = get_delivery_overview(tid)
+        
+        # Helper function to extract street and city from address (same as dashboard)
+        def extract_street_and_city(address_str, customer_municipality=None):
+            if not address_str:
+                return 'N/A', customer_municipality or 'N/A'
+            
+            # Format is usually: "Street, PostalCode Municipality, Province, Country"
+            parts = address_str.split(',')
+            
+            # Extract street (first part)
+            street = parts[0].strip() if len(parts) > 0 else ''
+            
+            # Extract municipality
+            municipality = customer_municipality
+            if not municipality and len(parts) >= 2:
+                # Get the part with postal code and municipality (usually second part)
+                # Format: "9620 Zottegem" -> extract "Zottegem"
+                municipality_part = parts[1].strip()
+                # Split by space and get the last word (municipality, skipping postal code)
+                words = municipality_part.split()
+                if len(words) >= 2:
+                    # Skip postal code, get municipality
+                    municipality = words[-1]
+                elif len(words) == 1:
+                    municipality = words[0]
+            
+            if not municipality:
+                # Fallback: use last part or whole address
+                municipality = parts[-1].strip() if len(parts) > 1 else address_str.strip()
+            
+            return street, municipality
+        
         items = []
         for row in rows:
             try:
-                # Unpack: delivery_id, product_name, municipality, status, order_date, scheduled_date, region_id
-                d_id, product_name, municipality, status, order_date, sched_date, r_id = row
+                # Unpack: delivery_id, product_name, municipality, status, order_date, scheduled_date, region_id, address
+                d_id, product_name, municipality, status, order_date, sched_date, r_id, address = row
 
                 # Parse delivery_hour from product_name if it contains " | Uur: "
                 product_description = product_name or 'Onbekend product'
@@ -283,12 +336,21 @@ def listings():
                     product_description = parts[0]
                     delivery_hour = parts[1] if len(parts) > 1 else None
 
+                # Extract street and city from address
+                street, city = extract_street_and_city(address, municipality)
+                
+                # Format as "Street, City" or just "City" if no street
+                if street and street != 'N/A':
+                    display_address = f"{street}, {city}"
+                else:
+                    display_address = city or municipality or 'N/A'
+
                 # Build display info - show product_name (description) instead of product_id
                 items.append({
                     "delivery_id": d_id,
                     "product_description": product_description,
                     "delivery_hour": delivery_hour,
-                    "municipality": municipality or 'N/A',  # Use actual municipality from RegionAddress
+                    "address": display_address,  # Now contains "Street, City" format
                     "status": str(status).split('.')[-1] if status else 'unknown',  # Extract enum value
                     "scheduled_date": sched_date
                 })

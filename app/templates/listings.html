@@ -33,6 +33,7 @@
       <thead>
         <tr>
           <th>Product Omschrijving</th>
+          <th>Adres</th>
           <th>Uur van de levering</th>
           <th>Status</th>
           <th>Geplande Datum</th>
@@ -44,6 +45,9 @@
           <tr>
             <td>
               <span class="font-medium">{{ listing.product_description or '—' }}</span>
+            </td>
+            <td>
+              <span class="text-muted">{{ listing.address or '—' }}</span>
             </td>
             <td>
               <span class="text-muted">{{ listing.delivery_hour or '—' }}</span>
@@ -77,6 +81,10 @@
           <div class="table-mobile-row">
             <div class="table-mobile-label">Product Omschrijving</div>
             <div class="table-mobile-value font-medium">{{ listing.product_description or '—' }}</div>
+          </div>
+          <div class="table-mobile-row">
+            <div class="table-mobile-label">Adres</div>
+            <div class="table-mobile-value">{{ listing.address or '—' }}</div>
           </div>
           <div class="table-mobile-row">
             <div class="table-mobile-label">Uur van de levering</div>

@@ -566,7 +566,8 @@ def get_delivery_overview(tenant_id: int, region_id: int = None, order_date: dat
         Product.name.label('product_name'),  # Get product name/description
         db.func.coalesce(Customer.municipality, Region.name).label('municipality'),  # Get municipality from Customer, fallback to Region.name
         Delivery.delivery_status,
-        CustomerOrder.order_date, DeliveryRun.scheduled_date, DeliveryRun.region_id
+        CustomerOrder.order_date, DeliveryRun.scheduled_date, DeliveryRun.region_id,
+        RegionAddress.address.label('address')  # Get full address from RegionAddress
     ).outerjoin(
         CustomerOrder,
         (Delivery.tenant_id == CustomerOrder.tenant_id) & (Delivery.order_id == CustomerOrder.order_id)
@@ -585,6 +586,11 @@ def get_delivery_overview(tenant_id: int, region_id: int = None, order_date: dat
     ).outerjoin(
         Region,
         (DeliveryRun.tenant_id == Region.tenant_id) & (DeliveryRun.region_id == Region.region_id)
+    ).outerjoin(
+        RegionAddress,
+        (DeliveryRun.tenant_id == RegionAddress.tenant_id) &
+        (DeliveryRun.region_id == RegionAddress.region_id) &
+        (DeliveryRun.scheduled_date == RegionAddress.scheduled_date)
     ).filter(Delivery.tenant_id == tenant_id)
 
     if region_id is not None:
