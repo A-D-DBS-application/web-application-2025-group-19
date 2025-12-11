@@ -1196,15 +1196,15 @@ def suggest_dates_by_location():
         return jsonify({"error": "Coordinates required"}), 400
     
     tid = tenant_id()
-    max_deliveries = 13  # Maximum leveringen per dag per regio
     
     try:
         # Gebruik het nieuwe algoritme om suggesties te krijgen
-        suggestions = get_suggested_dates_for_address(tid, lat, lng, max_deliveries, days_ahead=30)
+        suggestions, delivery_days = get_suggested_dates_for_address(tid, lat, lng, days_ahead=30)
         
         return jsonify({
             "suggestions": suggestions,
-            "has_matching_regions": len(suggestions) > 0
+            "delivery_days": delivery_days,  # Alle dagen met leveringen (voor star indicators)
+            "has_matching_regions": len(suggestions) > 0 or len(delivery_days) > 0
         })
         
     except Exception as e:

@@ -680,12 +680,18 @@ def find_matching_regions(tenant_id: int, lat: float, lng: float, max_distance_k
 def count_deliveries_for_region_date(tenant_id: int, region_id: int, scheduled_date: date) -> int:
     """
     Tel het aantal leveringen voor een specifieke regio op een specifieke datum.
+    Telt alleen actuele Delivery records, niet alleen RegionAddress entries.
     """
-    count = RegionAddress.query.filter(
-        RegionAddress.tenant_id == tenant_id,
-        RegionAddress.region_id == region_id,
-        RegionAddress.scheduled_date == scheduled_date
-    ).count()
+    count = db.session.query(db.func.count(Delivery.delivery_id)).join(
+        DeliveryRun,
+        (Delivery.tenant_id == DeliveryRun.tenant_id) & 
+        (Delivery.run_id == DeliveryRun.run_id)
+    ).filter(
+        DeliveryRun.tenant_id == tenant_id,
+        DeliveryRun.region_id == region_id,
+        DeliveryRun.scheduled_date == scheduled_date,
+        DeliveryRun.status.in_([RunStatus.planned, RunStatus.in_progress])
+    ).scalar() or 0
     return count
 
 
@@ -952,6 +958,10 @@ def get_suggested_dates_for_address(tenant_id: int, lat: float, lng: float, days
     2) Het aantal regio's die dag NIET groter is dan het aantal beschikbare trucks
     3) Het aantal leveringen die dag NIET groter is dan het aantal beschikbare chauffeurs
     4) De regio nog < max_deliveries_per_day heeft (per regio instelling)
+    
+    Returns: tuple (suggestions, delivery_days_dict)
+    - suggestions: lijst van beschikbare datums
+    - delivery_days_dict: dict {date_str: {region_id, region_name, delivery_count}} voor alle dagen met leveringen (ook volle)
     """
     from datetime import timedelta
     
@@ -959,9 +969,10 @@ def get_suggested_dates_for_address(tenant_id: int, lat: float, lng: float, days
     matching_regions = find_matching_regions(tenant_id, lat, lng)
     
     if not matching_regions:
-        return []
+        return [], {}
     
     suggestions = []
+    delivery_days = {}  # Dict van alle dagen met leveringen (voor star indicators)
     today = date.today()
     
     # Cache capaciteitsinfo per datum om herhaalde queries te voorkomen
@@ -978,7 +989,24 @@ def get_suggested_dates_for_address(tenant_id: int, lat: float, lng: float, days
             check_date = today + timedelta(days=i)
             date_str = str(check_date)
             
-            # Haal capaciteitsinfo uit cache of bereken
+            # Check regio-specifieke leveringslimiet (voor alle dagen, ook volle)
+            delivery_count = count_deliveries_for_region_date(tenant_id, region.region_id, check_date)
+            
+            # Bewaar delivery info voor ALLE dagen met leveringen (voor star indicators)
+            if delivery_count > 0:
+                if date_str not in delivery_days:
+                    delivery_days[date_str] = {
+                        "region_id": region.region_id,
+                        "region_name": region.name,
+                        "delivery_count": delivery_count,
+                        "max_deliveries": region_max_deliveries
+                    }
+                else:
+                    # Als meerdere regio's leveringen hebben op deze dag, gebruik de dichtstbijzijnde
+                    # (distance is hier niet beschikbaar, maar eerste gevonden is ok)
+                    pass
+            
+            # Haal capaciteitsinfo uit cache of bereken (alleen voor beschikbare dagen)
             if date_str not in capacity_cache:
                 capacity_cache[date_str] = get_capacity_info_for_date(tenant_id, check_date)
             
@@ -988,9 +1016,7 @@ def get_suggested_dates_for_address(tenant_id: int, lat: float, lng: float, days
             if not capacity_info["is_valid"]:
                 continue
             
-            # Check regio-specifieke leveringslimiet
-            delivery_count = count_deliveries_for_region_date(tenant_id, region.region_id, check_date)
-            
+            # Alleen beschikbare dagen toevoegen aan suggestions
             if delivery_count < region_max_deliveries:
                 suggestions.append({
                     "date": date_str,
@@ -1033,6 +1059,6 @@ def get_suggested_dates_for_address(tenant_id: int, lat: float, lng: float, days
             seen_dates.add(s["date"])
             unique_suggestions.append(s)
     
-    return unique_suggestions
+    return unique_suggestions, delivery_days
 
 

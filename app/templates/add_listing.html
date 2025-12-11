@@ -719,6 +719,7 @@
       .then(response => response.json())
       .then(data => {
         currentSuggestions = data.suggestions || [];
+        const deliveryDays = data.delivery_days || {};
         
         // Update calendar data with region-specific info (for star indicators)
         // Keep existing calendar data for days not in suggestions
@@ -738,9 +739,26 @@
             has_region_deliveries: s.delivery_count > 0 // Flag for star display
           };
         });
+        
+        // Update calendar data for ALL days with deliveries (including full days) for star indicators
+        Object.keys(deliveryDays).forEach(dateStr => {
+          const dayInfo = deliveryDays[dateStr];
+          if (!calendarData[dateStr]) {
+            calendarData[dateStr] = {};
+          }
+          // Only update if we don't already have better info from suggestions
+          if (!calendarData[dateStr].has_region_deliveries) {
+            calendarData[dateStr].has_region_deliveries = true;
+            calendarData[dateStr].count = dayInfo.delivery_count;
+            calendarData[dateStr].region_id = dayInfo.region_id;
+            calendarData[dateStr].region_name = dayInfo.region_name;
+            calendarData[dateStr].max_deliveries = dayInfo.max_deliveries || 13;
+          }
+        });
+        
         renderCalendar();
         
-        if (currentSuggestions.length > 0) {
+        if (currentSuggestions.length > 0 || Object.keys(deliveryDays).length > 0) {
           document.getElementById('calendar-hint').style.display = 'block';
           document.getElementById('no-suggestions').classList.add('hidden');
         } else {
@@ -1122,7 +1140,8 @@
         const starIndicator = document.createElement('span');
         starIndicator.className = 'star-indicator';
         starIndicator.textContent = '⭐';
-        starIndicator.title = `${calendarData[dateStr].count} levering(en) in deze regio op deze datum`;
+        const deliveryCount = calendarData[dateStr].count || 0;
+        starIndicator.title = `${deliveryCount} levering(en) in deze regio op deze datum`;
         dayCell.appendChild(starIndicator);
       }
       
