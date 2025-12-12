@@ -18,7 +18,18 @@ PG_DRIVER = os.getenv("PG_DRIVER", "psycopg2")  # gebruik 'psycopg2' of 'psycopg
 USE_SQLITE = os.getenv("USE_SQLITE", "0") == "1"
 
 # Build database URI at module load time (reads env vars fresh)
-if USE_SQLITE:
+# Priority: 1) DATABASE_URL (Render.com), 2) SQLite if enabled, 3) Supabase
+if os.getenv("DATABASE_URL"):
+    # Render.com provides DATABASE_URL, convert to SQLAlchemy format if needed
+    db_url = os.getenv("DATABASE_URL")
+    if db_url.startswith("postgres://"):
+        # Convert postgres:// to postgresql:// for SQLAlchemy
+        db_url = db_url.replace("postgres://", f"postgresql+{PG_DRIVER}://", 1)
+    elif not db_url.startswith("postgresql"):
+        # Ensure it uses the correct driver
+        db_url = db_url.replace("postgresql://", f"postgresql+{PG_DRIVER}://", 1)
+    DATABASE_URI = db_url
+elif USE_SQLITE:
     # Use absolute path for SQLite on Windows
     db_path = Path(__file__).parent.parent / "dev.db"
     DATABASE_URI = f"sqlite:///{db_path}"

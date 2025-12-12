@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: web-application-2025-group-19
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn run:app --bind 0.0.0.0:$PORT
+    envVars:
+      - key: USE_SQLITE
+        value: 0
+      - key: PG_DRIVER
+        value: psycopg2
+      - key: TENANT_ID
+        value: 1
+
