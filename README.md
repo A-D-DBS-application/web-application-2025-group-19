@@ -32,3 +32,32 @@ Korte beschrijving van wat je op de site kunt doen.
 
 ## Multi-tenant basis
 - `tenant_id` op alle tabellen; default tenant wordt bij start of eerste run aangemaakt.
+
+## Tech stack
+Hoofdstack (server + data):
+-Flask 3.1 (Python) met Jinja2 templates.
+-Flask-SQLAlchemy + SQLAlchemy 2.0 voor ORM.
+-Flask-Migrate/Alembic voor schema migraties.
+-Database primair: PostgreSQL (Supabase), lokaal fallback: SQLite.
+-psycopg2-binary als Postgres driver.
+Frontend:
+-Server-side rendered HTML + Jinja2.
+-Statische assets (CSS/JS) onder app/static; geen React of bundler.
+Overige:
+-Requests voor HTTP-calls, icalendar util.
+-Mapbox token support voor geolocatie in templates (config).
+
+## UI prototype (Figma)
+
+## Database
+
+## User stories
+
+## Feedback sessions
+
+## Team
+- Alexia Lehouck
+- Pierre Broekaert
+- Herben Vanderhaegen
+- Michael Vandekerckhove
+- Arnaud Jaecques
