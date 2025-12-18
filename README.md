@@ -49,6 +49,8 @@ Korte beschrijving van wat je op de site kunt doen.
 - Database dump/backup: (niet aangetroffen). Bewaar bij voorkeur buiten de repo of in `backups/` met naam en datum, bv. `backups/db-backup-YYYYMMDD.sql`.
 
 ## UI prototype (Figma)
+- Figma prototype main UI: https://www.figma.com/make/wONpMO5WGtPqdMSlWbuxA9/Recreate-Website-Design?t=qzE7xTEhYC9LVvCJ-1
+- Figma prototype Login: https://www.figma.com/make/JrogweV06uG5t0fhWOjKEk/Recreate-Login-Window?t=vCxRCXjFN6Bna2wM-1
 
 ## User stories
 
