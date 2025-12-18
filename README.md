@@ -33,23 +33,22 @@ Korte beschrijving van wat je op de site kunt doen.
 ## Multi-tenant basis
 - `tenant_id` op alle tabellen; default tenant wordt bij start of eerste run aangemaakt.
 
+## Database
+- PostgreSQL (Supabase) als primaire database; SQLite fallback mogelijk voor lokaal testen.
+
 ## Tech stack
--Hoofdstack (server + data):
-  -Flask 3.1 (Python) met Jinja2 templates.
-  -Flask-SQLAlchemy + SQLAlchemy 2.0 voor ORM.
-  -Flask-Migrate/Alembic voor schema migraties.
-  -Database primair: PostgreSQL (Supabase), lokaal fallback: SQLite.
-  -psycopg2-binary als Postgres driver.
--Frontend:
-  -Server-side rendered HTML + Jinja2.
-  -Statische assets (CSS/JS) onder app/static; geen React of bundler.
--Overige:
-  -Requests voor HTTP-calls, icalendar util.
-  -Mapbox token support voor geolocatie in templates (config).
+- Backend: Flask 3.1 (Python) met Jinja2-templates.
+- Data: SQLAlchemy 2.0 + Flask-SQLAlchemy; Flask-Migrate/Alembic voor schema-migraties.
+- Database: PostgreSQL (Supabase) primair, SQLite lokaal als fallback; driver: psycopg2-binary.
+- Frontend: server-side rendered HTML/Jinja2 met statische assets in `app/static`.
+- Overig: requests voor HTTP-calls, icalendar helper, Mapbox token-support in config.
+
+## Database artefacten
+- ERD-model: (niet aangetroffen in de repo). Voeg bijv. toe in `docs/erd.png` of `assets/erd.png`.
+- DDL-schema: (niet aangetroffen). Plaats bij voorkeur in `docs/schema.sql` of `migrations/` als referentie.
+- Database dump/backup: (niet aangetroffen). Bewaar bij voorkeur buiten de repo of in `backups/` met naam en datum, bv. `backups/db-backup-YYYYMMDD.sql`.
 
 ## UI prototype (Figma)
-
-## Database
 
 ## User stories
 
