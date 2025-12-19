@@ -45,9 +45,8 @@
 - Overig: requests voor HTTP-calls, icalendar helper, Mapbox token-support in config.
 
 ## Database artefacten
-- ERD-model: (niet aangetroffen in de repo). Voeg bijv. toe in `docs/erd.png` of `assets/erd.png`.
-- DDL-schema: (niet aangetroffen). Plaats bij voorkeur in `docs/schema.sql` of `migrations/` als referentie.
-- Database dump/backup: (niet aangetroffen). Bewaar bij voorkeur buiten de repo of in `backups/` met naam en datum, bv. `backups/db-backup-YYYYMMDD.sql`.
+- ERD-model: in ERD model.png (https://github.com/A-D-DBS-application/web-application-2025-group-19/blob/main/ERD%20model.png)
+- Database dump/backup: in Database dump.docx (https://github.com/A-D-DBS-application/web-application-2025-group-19/blob/main/Database%20dump.docx)
 
 ## UI prototype (Figma)
 - Figma prototype main UI: https://www.figma.com/make/wONpMO5WGtPqdMSlWbuxA9/Recreate-Website-Design?t=qzE7xTEhYC9LVvCJ-1
