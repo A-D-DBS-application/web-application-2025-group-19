@@ -1,6 +1,9 @@
 [![Review Assignment Due Date](https://classroom.github.com/assets/deadline-readme-button-22041afd0340ce965d47ae6ef1cefeee28c7c493a6346c4f15d667ab976d596c.svg)](https://classroom.github.com/a/DxqGQVx4)
 # Sleep Inn Scheduler — Functies
 
+## Wat is het doel?
+- Projectbeschrijving: https://ugentbe-my.sharepoint.com/:w:/g/personal/arnaud_jaecques_ugent_be/IQAlcBniS3dkQ4pIevxqwnqsAfS2xTmEqggnpMmjvZuCLlI?e=g2rxez
+
 Korte beschrijving van wat je op de site kunt doen.
 
 ## Hoofdschermen
@@ -65,6 +68,9 @@ Korte beschrijving van wat je op de site kunt doen.
 ## Feedback sessions
 - Session 1: https://ugentbe-my.sharepoint.com/:u:/g/personal/arnaud_jaecques_ugent_be/IQA_-_l5SDhCS5eAF85HnGX7AeuyUmlbahbkWZy8kQ06WMk?nav=eyJyZWZlcnJhbEluZm8iOnsicmVmZXJyYWxBcHAiOiJPbmVEcml2ZUZvckJ1c2luZXNzIiwicmVmZXJyYWxBcHBQbGF0Zm9ybSI6IldlYiIsInJlZmVycmFsTW9kZSI6InZpZXciLCJyZWZlcnJhbFZpZXciOiJNeUZpbGVzTGlua0NvcHkifX0&e=qjdr0W
 - Session 2: https://ugentbe-my.sharepoint.com/:u:/g/personal/arnaud_jaecques_ugent_be/IQAJ0pk106mzRLbj72N3vQzmAcWHpwKqf0QBq6uOm0Y6A80?nav=eyJyZWZlcnJhbEluZm8iOnsicmVmZXJyYWxBcHAiOiJPbmVEcml2ZUZvckJ1c2luZXNzIiwicmVmZXJyYWxBcHBQbGF0Zm9ybSI6IldlYiIsInJlZmVycmFsTW9kZSI6InZpZXciLCJyZWZlcnJhbFZpZXciOiJNeUZpbGVzTGlua0NvcHkifX0&e=WBIIdP
+
+## MVP Handover & IP Assignment Agreement
+- https://ugentbe-my.sharepoint.com/:b:/g/personal/arnaud_jaecques_ugent_be/IQDNY2XYFONBSLC7-spZcwaqActUruyT3IduEm9aLng6syM?e=Aezb3s
 
 ## Team
 - Alexia Lehouck
