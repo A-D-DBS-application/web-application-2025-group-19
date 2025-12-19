@@ -1,5 +1,5 @@
 [![Review Assignment Due Date](https://classroom.github.com/assets/deadline-readme-button-22041afd0340ce965d47ae6ef1cefeee28c7c493a6346c4f15d667ab976d596c.svg)](https://classroom.github.com/a/DxqGQVx4)
-# Sleep Inn Scheduler — Functies
+# Sleep Inn Scheduler 
 
 ## Wat is het doel?
 - Projectbeschrijving: https://ugentbe-my.sharepoint.com/:w:/g/personal/arnaud_jaecques_ugent_be/IQAlcBniS3dkQ4pIevxqwnqsAfS2xTmEqggnpMmjvZuCLlI?e=g2rxez
@@ -48,15 +48,15 @@
 - ERD-model: in ERD model.png (https://github.com/A-D-DBS-application/web-application-2025-group-19/blob/main/ERD%20model.png)
 - Database dump/backup: in Database dump.docx (https://github.com/A-D-DBS-application/web-application-2025-group-19/blob/main/Database%20dump.docx)
 
+## Drive
+- Overzicht van alle nodige bestanden: https://ugentbe-my.sharepoint.com/:f:/g/personal/arnaud_jaecques_ugent_be/IgCd0dt7Q8wiRoBLI81ikfTsAdTRqt0Y5nGa8vY2vXmKJEU?e=EuSlh9
+
 ## UI prototype (Figma)
 - Figma prototype main UI: https://www.figma.com/make/wONpMO5WGtPqdMSlWbuxA9/Recreate-Website-Design?t=qzE7xTEhYC9LVvCJ-1
 - Figma prototype Login: https://www.figma.com/make/JrogweV06uG5t0fhWOjKEk/Recreate-Login-Window?t=vCxRCXjFN6Bna2wM-1
 
 ## Flask instructies
 - Flask setup en run: https://ugentbe-my.sharepoint.com/:w:/g/personal/arnaud_jaecques_ugent_be/IQDVaULKGQJYQptgqWgIKlAuAejYR1XIw_uMXVTGmDVFJjo?e=cNcq1i
-
-## Drive
-- https://ugentbe-my.sharepoint.com/:f:/g/personal/arnaud_jaecques_ugent_be/IgCd0dt7Q8wiRoBLI81ikfTsAdTRqt0Y5nGa8vY2vXmKJEU?e=EuSlh9
 
 ## User stories
 - https://ugentbe-my.sharepoint.com/:w:/g/personal/arnaud_jaecques_ugent_be/IQDbdpV4vQuvTrWji7QD3_REAXQZVZH6l7c5gLp39xalDbY?e=momsw7
