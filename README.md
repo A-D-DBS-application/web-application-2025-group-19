@@ -53,7 +53,7 @@ Korte beschrijving van wat je op de site kunt doen.
 - Figma prototype Login: https://www.figma.com/make/JrogweV06uG5t0fhWOjKEk/Recreate-Login-Window?t=vCxRCXjFN6Bna2wM-1
 
 ## Drive
-https://ugentbe-my.sharepoint.com/:f:/g/personal/arnaud_jaecques_ugent_be/IgCd0dt7Q8wiRoBLI81ikfTsAdTRqt0Y5nGa8vY2vXmKJEU?e=EuSlh9
+- https://ugentbe-my.sharepoint.com/:f:/g/personal/arnaud_jaecques_ugent_be/IgCd0dt7Q8wiRoBLI81ikfTsAdTRqt0Y5nGa8vY2vXmKJEU?e=EuSlh9
 
 ## Team
 - Alexia Lehouck
