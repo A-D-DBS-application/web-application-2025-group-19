@@ -4,8 +4,6 @@
 ## Wat is het doel?
 - Projectbeschrijving: https://ugentbe-my.sharepoint.com/:w:/g/personal/arnaud_jaecques_ugent_be/IQAlcBniS3dkQ4pIevxqwnqsAfS2xTmEqggnpMmjvZuCLlI?e=g2rxez
 
-Korte beschrijving van wat je op de site kunt doen.
-
 ## Hoofdschermen
 - Home: dashboard met navigatie naar bestellingen, runs, chauffeurs en trucks.
 - Inloggen/Registreren: accounts aanmaken en inloggen.
