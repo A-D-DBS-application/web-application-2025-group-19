@@ -56,7 +56,7 @@ Korte beschrijving van wat je op de site kunt doen.
 - https://ugentbe-my.sharepoint.com/:f:/g/personal/arnaud_jaecques_ugent_be/IgCd0dt7Q8wiRoBLI81ikfTsAdTRqt0Y5nGa8vY2vXmKJEU?e=EuSlh9
 
 ## User stories
-https://ugentbe-my.sharepoint.com/:w:/g/personal/arnaud_jaecques_ugent_be/IQDbdpV4vQuvTrWji7QD3_REAXQZVZH6l7c5gLp39xalDbY?e=momsw7
+- https://ugentbe-my.sharepoint.com/:w:/g/personal/arnaud_jaecques_ugent_be/IQDbdpV4vQuvTrWji7QD3_REAXQZVZH6l7c5gLp39xalDbY?e=momsw7
 
 ## Powerpoint en demo
 - Powerpoint: https://ugentbe-my.sharepoint.com/:p:/g/personal/arnaud_jaecques_ugent_be/IQDIiRxAlfiqRZdW1om_jEzoAZs-xQSxQWOQZgW5MJAxBIw?e=Pv0BnI
@@ -64,7 +64,7 @@ https://ugentbe-my.sharepoint.com/:w:/g/personal/arnaud_jaecques_ugent_be/IQDbdp
 
 ## Feedback sessions
 - Session 1: https://ugentbe-my.sharepoint.com/:u:/g/personal/arnaud_jaecques_ugent_be/IQA_-_l5SDhCS5eAF85HnGX7AeuyUmlbahbkWZy8kQ06WMk?nav=eyJyZWZlcnJhbEluZm8iOnsicmVmZXJyYWxBcHAiOiJPbmVEcml2ZUZvckJ1c2luZXNzIiwicmVmZXJyYWxBcHBQbGF0Zm9ybSI6IldlYiIsInJlZmVycmFsTW9kZSI6InZpZXciLCJyZWZlcnJhbFZpZXciOiJNeUZpbGVzTGlua0NvcHkifX0&e=qjdr0W
-- Session 2: https://ugentbe-my.sharepoint.com/:u:/g/personal/arnaud_jaecques_ugent_be/IQAJ0pk106mzRLbj72N3vQzmAcWHpwKqf0QBq6uOm0Y6A80?    nav=eyJyZWZlcnJhbEluZm8iOnsicmVmZXJyYWxBcHAiOiJPbmVEcml2ZUZvckJ1c2luZXNzIiwicmVmZXJyYWxBcHBQbGF0Zm9ybSI6IldlYiIsInJlZmVycmFsTW9kZSI6InZpZXciLCJyZWZlcnJhbFZpZXciOiJNeUZpbGVzTGlua0NvcHkifX0&e=p37cRl
+- Session 2: https://ugentbe-my.sharepoint.com/:u:/g/personal/arnaud_jaecques_ugent_be/IQAJ0pk106mzRLbj72N3vQzmAcWHpwKqf0QBq6uOm0Y6A80?nav=eyJyZWZlcnJhbEluZm8iOnsicmVmZXJyYWxBcHAiOiJPbmVEcml2ZUZvckJ1c2luZXNzIiwicmVmZXJyYWxBcHBQbGF0Zm9ybSI6IldlYiIsInJlZmVycmFsTW9kZSI6InZpZXciLCJyZWZlcnJhbFZpZXciOiJNeUZpbGVzTGlua0NvcHkifX0&e=WBIIdP
 
 ## Team
 - Alexia Lehouck
